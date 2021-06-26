@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>纹理合成</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <script id="vertexShader" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    attribute vec2 a_Pin;
+    uniform float u_Inter;
+    varying vec2 v_Pin;
+    void main(){
+      gl_Position = a_Position;
+
+      vec2 p=a_Pin;
+      
+      float ang=atan(p.y,p.x)+u_Inter;
+      float r=0.2;
+      p.x+=cos(ang)*r;
+      p.y+=sin(ang)*r;
+
+      v_Pin=p;
+    }
+  </script>
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform sampler2D u_Sampler;
+    varying vec2 v_Pin;
+    void main(){
+      gl_FragColor=texture2D(u_Sampler,v_Pin);
+    }
+  </script>
+  <script type="module">
+    import { imgPromise, initShaders, GetIndexInGrid } from '../jsm/Utils.js';
+    import Poly from './jsm/Poly.js';
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const gl = canvas.getContext('webgl');
+
+    const vsSource = document.getElementById('vertexShader').innerText;
+    const fsSource = document.getElementById('fragmentShader').innerText;
+    initShaders(gl, vsSource, fsSource);
+    gl.clearColor(1, 1, 0.7, 1.0);
+
+    /* x,y 方向的空间坐标极值 */
+    const [minPosX, maxPosX, minPosY, maxPosY] = [
+      -0.8, 0.8, -0.8, 0.8
+    ]
+    /* 行数和列数 */
+    const [rows, cols] = [5, 5]
+
+    /* 间距 */
+    const spaceY = (maxPosY - minPosY) / (rows - 1)
+    const spaceX = (maxPosX - minPosX) / (cols - 1)
+
+    //数据源
+    /* const source = new Float32Array([
+      -0.5, 0.5, 0, 1,
+      -0.5, -0.5, 0, 0,
+      0.5, 0.5, 1.0, 1,
+      0.5, -0.5, 1.0, 0,
+    ]); */
+
+
+    const source = new Float32Array([
+      -0.5, 0.5, 0, 1,
+      -0.5, -0.5, 0, 0,
+      0, 0.5, 1.0, 1,
+      0.5, -0.5, 1.0, 0,
+
+      -1, 0.5, 0, 1,
+      -1, -0.5, 0, 0,
+      1, 0.5, 1.0, 1,
+      1, -0.5, 1.0, 0,
+
+      -0.5, 1, 0, 1,
+      -0.5, -1, 0, 0,
+      0.5, 1, 1.0, 1,
+      0.5, -1, 1.0, 0,
+
+      -1, 1, 0, 1,
+      -1, -1, 0, 0,
+      1, 1, 1.0, 1,
+      1, -1, 1.0, 0,
+    ]);
+
+    let inter = 0;
+
+    const a_Position = {
+      size: 2,
+      index: 0
+    };
+    const a_Pin = {
+      size: 2,
+      index: 2
+    };
+    /* 类目尺寸 */
+    const categorySize = a_Position.size + a_Pin.size
+
+    //获取索引位置的方法
+    const getInd = GetIndexInGrid(cols, categorySize)
+
+    /* 获取基础数据
+        vertices 按照行列形式排列的顶点集合
+        indexes 三角网格的顶点索引，其元素为顶点在vertices中的索引
+    */
+    const { vertices, indexes } = crtBaseData();
+
+    const rect = new Poly({
+      gl,
+      //source: getSource(vertices, indexes, categorySize),
+      //type: 'TRIANGLES',
+      source,
+      type: 'TRIANGLE_STRIP',
+      attributes: {
+        a_Position,
+        a_Pin
+      },
+      uniforms: {
+        u_Inter: {
+          type: 'uniform1f',
+          value: inter
+        }
+      }
+
+    })
+
+    const image = new Image()
+    image.src = './images/jl.jpg'
+    image.onload = function () {
+      rect.maps = {
+        u_Sampler: {
+          image,
+          wrapS: gl.MIRRORED_REPEAT,
+          wrapT: gl.MIRRORED_REPEAT,
+        },
+      }
+      rect.updateMaps()
+      ani()
+    }
+
+    function ani() {
+      inter += 0.02
+      rect.uniforms.u_Inter.value = inter
+      rect.updateUniform()
+      gl.clear(gl.COLOR_BUFFER_BIT)
+      rect.draw()
+      requestAnimationFrame(ani)
+    }
+
+    function crtBaseData() {
+      const vertices = []
+      const indexes = []
+      for (let y = 0; y < rows; y++) {
+        console.log('--------');
+        for (let x = 0; x < cols; x++) {
+          const px = x * spaceX + minPosX
+          const py = y * spaceY + minPosY
+          const s = x / (cols - 1)
+          const t = y / (rows - 1)
+          console.log(s, y);
+          vertices.push(px, py, s, t)
+          if (y && x) {
+            const [x0, y0] = [x - 1, y - 1]
+            indexes.push(
+              getInd(x0, y0),
+              getInd(x, y0),
+              getInd(x, y),
+              getInd(x0, y0),
+              getInd(x, y),
+              getInd(x0, y),
+            )
+          }
+        }
+      }
+      return { vertices, indexes }
+    }
+
+    /* 建立顶点集合 */
+    function getSource(vertices, indexes, categorySize) {
+      const arr = []
+      indexes.forEach(i => {
+        arr.push(...vertices.slice(i, i + categorySize))
+      })
+      return arr
+    }
+
+  </script>
+</body>
+
+</html>

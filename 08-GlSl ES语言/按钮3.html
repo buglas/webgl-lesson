@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>按钮</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: #333;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <script id="vertexShader" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    void main(){
+        gl_Position=a_Position;
+    }
+  </script>
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform vec2 u_CanvasSize;
+    
+    vec2 center=u_CanvasSize/2.0;
+    float diagLen=length(center);
+    float pi2=radians(360.0);
+
+    //渐变
+    float gradient(float x){
+      float a=x/u_CanvasSize.x;
+      float b=radians(360.0)*5.0*a;
+      return (sin(b)+1.0)/2.0;
+    }
+
+    //水平拉丝
+    float wire(vec2 v){
+      vec2 a= vec2(0.0,1.0);
+      float n= dot(v,a);
+      return fract(tan(n)*10000.0);
+    }
+
+    //杂色
+    float noise(vec2 v){
+      vec2 a= vec2(0.1234,0.5678);
+      float n= dot(v,a);
+      return fract(tan(n)*10000.0);
+    }
+
+    //获取弧度
+    float getAngle(vec2 v){
+      float ang=atan(v.y,v.x);
+      if(ang<0.0){
+          ang+=pi2;
+      }
+      return ang;
+    }
+
+    void main(){
+      //极坐标系转二维直角坐标系
+      vec2 p=gl_FragCoord.xy-center;
+      float len=length(p);
+      float ang=getAngle(p);
+      float x=u_CanvasSize.x*ang/pi2;
+      float y=(len/diagLen)*u_CanvasSize.y;
+
+      //渐变
+      float f1 = gradient(x);
+      f1=0.65*f1+0.50;
+
+      //拉丝
+      float f2 = wire(vec2(int(x),int(y)));
+      f2=clamp(f2,0.75,0.8);
+
+      //杂色
+      float f3 = noise(gl_FragCoord.xy);
+      f3*=0.07;
+
+      //复合亮度
+      float f=f1*f2+f3;
+
+      //片元亮度集合
+      float sinRatio1=(sin(ang)+1.0)/2.0;
+      float sinRatio2=1.0-sinRatio1;
+      float ls[3];
+      ls[0]=f*(sinRatio2+0.3);
+      ls[1]=f*(sinRatio1+0.1);
+      ls[2]=f*(sinRatio1+0.3);
+
+      //初始半径
+      float r=150.0;
+      //半径集合
+      float rs[3];
+      rs[0]=r+4.0;
+      rs[1]=rs[0]+12.0;
+      rs[2]=rs[1]+3.0;
+      
+      //基于len值，计算片元亮度
+      for(int i=0;i<3;i++){
+        if(len>=r&&len<rs[i]){
+          f=ls[i];
+          break;
+        }
+        r=rs[i];
+      }
+      
+      gl_FragColor = vec4(vec3(f), 1);
+    }
+  </script>
+  <script type="module">
+    import { initShaders } from '../jsm/Utils.js';
+    import Poly from './jsm/Poly.js';
+
+
+    const canvas = document.getElementById('canvas');
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const gl = canvas.getContext('webgl');
+
+    const vsSource = document.getElementById('vertexShader').innerText;
+    const fsSource = document.getElementById('fragmentShader').innerText;
+    initShaders(gl, vsSource, fsSource);
+    gl.clearColor(0, 0, 0, 1);
+
+
+    const source = new Float32Array([
+      -1, 1,
+      -1, -1,
+      1, 1,
+      1, -1
+    ]);
+
+    const rect = new Poly({
+      gl,
+      source,
+      type: 'TRIANGLE_STRIP',
+      attributes: {
+        a_Position: {
+          size: 2,
+          index: 0
+        }
+      },
+      uniforms: {
+        u_CanvasSize: {
+          type: 'uniform2fv',
+          value: [canvas.width, canvas.height]
+        }
+      }
+    })
+
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    rect.draw()
+
+  </script>
+</body>
+
+</html>

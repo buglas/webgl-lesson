@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>极坐标</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: blanchedalmond;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <script id="vertexShader" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    void main(){
+        gl_Position=a_Position;
+    }
+  </script>
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform vec2 u_CanvasSize;
+    vec2 center=u_CanvasSize/2.0;
+    float pi=radians(360.0)/2.0;
+
+    float rand(vec2 v){
+      float a=v.x/u_CanvasSize.x;
+      float b=radians(360.0)*7.0*a;
+      return (sin(b)+1.0)/2.0;
+    }
+
+    float scaler(float ax,float ay,float bx,float by,float x){
+      float x1=bx-ax;
+      float y1=by-ay;
+      float k=y1/x1;
+      float b=ay-ax*k;
+      return k*x+b;
+    }
+
+    void main(){
+      vec2 p=gl_FragCoord.xy-center;
+      float ang=atan(p.y,p.x);
+      float x=scaler(-pi,0.0,pi,u_CanvasSize.x,ang);
+      float f = rand(vec2(x,0)); 
+      //float f = rand(gl_FragCoord.xy); 
+      gl_FragColor = vec4(f, f, f, 1);
+    }
+  </script>
+  <script type="module">
+    import { initShaders } from '../jsm/Utils.js';
+    import Poly from './jsm/Poly.js';
+
+
+    const canvas = document.getElementById('canvas');
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const gl = canvas.getContext('webgl');
+
+    const vsSource = document.getElementById('vertexShader').innerText;
+    const fsSource = document.getElementById('fragmentShader').innerText;
+    initShaders(gl, vsSource, fsSource);
+    gl.clearColor(0, 0, 0, 1);
+
+    const source = new Float32Array([
+      -1, 1,
+      -1, -1,
+      1, 1,
+      1, -1
+    ]);
+
+    const rect = new Poly({
+      gl,
+      source,
+      type: 'TRIANGLE_STRIP',
+      attributes: {
+        a_Position: {
+          size: 2,
+          index: 0
+        }
+      },
+      uniforms: {
+        u_CanvasSize: {
+          type: 'uniform2fv',
+          value: [canvas.width, canvas.height]
+        }
+      }
+    })
+
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    rect.draw()
+
+  </script>
+</body>
+
+</html>

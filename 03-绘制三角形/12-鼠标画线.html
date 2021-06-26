@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>鼠标画线</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+      }
+      #canvas {
+        background-color: antiquewhite;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="canvas"></canvas>
+    <!-- 顶点着色器 -->
+    <script id="vertexShader" type="x-shader/x-vertex">
+      attribute vec4 a_Position;
+      void main(){
+          gl_Position=a_Position;
+          gl_PointSize=10.0;
+      }
+    </script>
+    <!-- 片元着色器 -->
+    <script id="fragmentShader" type="x-shader/x-fragment">
+      precision mediump float;
+      void main(){
+          float dist=distance(gl_PointCoord,vec2(0.5,0.5));
+          if(dist<0.5){
+            gl_FragColor=vec4(1,1,0,1);
+          }else{
+            discard;
+          }
+      }
+    </script>
+    <script type="module">
+      import { initShaders,getMousePosInWebgl } from "../jsm/Utils.js";
+      import Poly from "../jsm/Poly.js";
+
+      const canvas = document.querySelector("#canvas");
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      // 获取着色器文本
+      const vsSource = document.querySelector("#vertexShader").innerText;
+      const fsSource = document.querySelector("#fragmentShader").innerText;
+
+      //三维画笔
+      const gl = canvas.getContext("webgl")
+
+      //初始化着色器
+      initShaders(gl, vsSource, fsSource);
+      
+      //声明颜色 rgba
+      gl.clearColor(0, 0, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+
+      //实例化多边形
+      const poly=new Poly({
+        gl,
+        types:['POINTS','LINE_STRIP']
+      })
+
+      // 鼠标点击事件
+      canvas.addEventListener("click", (event) => {
+        const {x,y}=getMousePosInWebgl(event,canvas)
+        poly.addVertice(x,y)
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        poly.draw()
+      });
+    </script>
+  </body>
+</html>

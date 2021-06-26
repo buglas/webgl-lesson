@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+  <link rel="stylesheet" href="../type.css" />
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+
+    #canvas {
+      background-color: antiquewhite;
+    }
+  </style>
+  <!-- <script src="../dires/webgl-helper.js"></script>
+    <script src="../../canvas2d资料/代码/08-动画/js/d3-color.js"></script>
+    <script src="../../canvas2d资料/代码/08-动画/js/SupTween.js"></script>
+    <style>
+        #canvas {
+            border: 1px solid blue;
+        }
+    </style> -->
+</head>
+
+<body>
+
+  <canvas id="canvas"></canvas>
+  <!-- 顶点着色器 -->
+  <script id="vertexShader" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    attribute float a_PointSize;
+    void main(){
+        gl_Position=a_Position;//点位 位置
+        //尺寸
+        gl_PointSize=a_PointSize;
+    }
+  </script>
+  <!-- 片元着色器 -->
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    precision mediump float;  //定义精度为中级 类型为浮点类型
+    uniform vec4 u_FragColor;
+    uniform bool u_IsPOINTS;
+      void main(){
+        if(u_IsPOINTS){
+            float dist=distance(gl_PointCoord,vec2(0.5,0.5)); // distance比对两点距离的内置方法
+            if(dist<0.5){    //  两点大于0.5在范围之外不渲染片元颜色，小于0.5范围之内渲染
+              gl_FragColor=u_FragColor;
+            }else{
+              discard;
+            }
+          }else{
+            gl_FragColor=u_FragColor;
+        }
+    }  
+  </script>
+  <!-- <script id="fragmentShader" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform vec4 u_FragColor;
+    void main(){
+        gl_FragColor=u_FragColor;
+    }
+  </script> -->
+  <script type="module">
+    import { initShaders } from "../jsm/Utils.js";
+
+    const canvas = document.querySelector("#canvas");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // 获取着色器文本
+    const vsSource = document.querySelector("#vertexShader").innerText;
+    const fsSource = document.querySelector("#fragmentShader").innerText;
+
+    //三维画笔
+    const gl = canvas.getContext("webgl");
+    gl.enable(gl.BLEND);//开启片元合成功能
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);//片元合成方式
+
+    //初始化着色器
+    initShaders(gl, vsSource, fsSource);
+
+    //设置attribute 变量
+    // a_Position=vec4(1,0,0,1)
+    const a_Position = gl.getAttribLocation(gl.program, "a_Position");   //获取GLEL Es语言的位置指针
+    const a_PointSize = gl.getAttribLocation(gl.program, "a_PointSize");
+    const u_FragColor = gl.getUniformLocation(gl.program, "u_FragColor");
+    const u_IsPOINTS = gl.getUniformLocation(gl.program, "u_IsPOINTS");
+    gl.uniform1f(u_IsPOINTS, 1);
+
+    const stars = [];
+
+    //修改attribute 变量
+    // gl.vertexAttrib3f(a_Position, 0, 1, 0);  X Y Z三个轴
+    // gl.vertexAttrib2f(a_Position, 0.5, 0.5); X Y两个轴
+    // gl.vertexAttrib1f(a_Position, 0.1);     X 轴·
+
+    gl.clearColor(0, 0, 0, 1);
+    //刷底色
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    render();
+    gl.clearColor(0, 0, 0, 1);
+    //刷底色
+    // 鼠标点击事件
+    canvas.addEventListener("click", ({ clientX, clientY }) => {
+      //对于鼠标点在webgl 坐标系中的位置，我们是无法直接获取的。所以我们得先获取鼠标在canvas 这个DOM元素中的位置。点击画布位置计算方法：点击的坐标位置减画布的边到浏览器位置
+      const { left, top, width, height } = canvas.getBoundingClientRect();
+      const [cssX, cssY] = [clientX - left, clientY - top]; // 计算点击在画布的位置
+
+      //canvas坐标系转webGL坐标系，webGL的圆点在画布中心，而canvas的圆点在左上角
+      const [halfWidth, halfHeight] = [width / 2, height / 2];  //找到画布的圆点也就是中心点
+      const [xBaseCenter, yBaseCenter] = [cssX - halfWidth, cssY - halfHeight]; // 当前点击的位置有webGL转成canvas的位置，当前点击的位置减webGL的圆点位置
+      // 解决y 方向的差异
+      const yBaseCenterTop = -yBaseCenter;//webGL的Y轴和canvas的Y轴方向相反
+      //解决坐标基底的差异
+      const [x, y] = [xBaseCenter / halfWidth, yBaseCenterTop / halfHeight];//用当前点击的位置除webGL的圆点就是webGL的位置,一个点位先转成canvas的点位在转成webGL的坐标，在转成canvas的点位呈现
+
+      const s = Math.random() * 50 + 2;
+      const n = Math.random();
+      const color = { r: n, g: n, b: 1, a: n };  // rgba就是颜色值加透明度
+      stars.push({ x, y, s, color });
+      render();
+    });
+
+    // 渲染方法
+    function render() {
+      gl.clear(gl.COLOR_BUFFER_BIT); //刷底色，刷底色在颜色渲染之后底色就会会覆盖渲染点的颜色
+      stars.forEach(({ x, y, s, color: { r, g, b, a } }) => {
+        gl.vertexAttrib2f(a_Position, x, y);  // 通过GLSL ES语言把坐标位置赋给赋给变量指针
+        gl.vertexAttrib1f(a_PointSize, s);     //  圆点大小的变量指针
+        const arr = new Float32Array([r, g, b, a]);//整理就是定义的颜色a是透明度
+
+        gl.uniform4fv(u_FragColor, arr);   // 颜色的变量指针
+        gl.drawArrays(gl.POINTS, 0, 1); // 绘制顶点
+      });
+
+      gl.clearColor(0, 0, 0, 1);
+      //刷底色
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </script>
+
+</body>
+
+</html>

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>先旋转后位移</title>
+  <link rel="icon" href="https://img.kaikeba.com/kkb_portal_icon.ico">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <script id="vertexShader" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    //列主序
+    uniform mat4 u_Matrix;
+    void main(){
+      gl_Position = u_Matrix*a_Position;
+    }
+  </script>
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    void main(){
+      gl_FragColor=vec4(1.0,1.0,0.0,1.0);
+    }
+  </script>
+  <script type="module">
+    import { initShaders } from '../jsm/Utils.js';
+    import { Matrix4 } from 'https://unpkg.com/three/build/three.module.js';
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const gl = canvas.getContext('webgl');
+
+    const vsSource = document.getElementById('vertexShader').innerText;
+    const fsSource = document.getElementById('fragmentShader').innerText;
+    initShaders(gl, vsSource, fsSource);
+
+    const vertices = new Float32Array([
+      0.0, 0.1,
+      -0.1, -0.1,
+      0.1, -0.1
+    ])
+
+    const vertexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+    const a_Position = gl.getAttribLocation(gl.program, 'a_Position');
+    gl.vertexAttribPointer(a_Position, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(a_Position);
+
+    const u_Matrix = gl.getUniformLocation(gl.program, 'u_Matrix')
+
+    const mr = new Matrix4();
+    mr.makeRotationZ(Math.PI)
+
+    const mt = new Matrix4();
+    mt.makeTranslation(0.6, 0.3, 0)
+
+
+    // const matrix = mt.multiply(mr)
+    const matrix = mr.multiply(mt)
+    gl.uniformMatrix4fv(u_Matrix, false, matrix.elements)
+
+
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+
+
+  </script>
+</body>
+
+</html>

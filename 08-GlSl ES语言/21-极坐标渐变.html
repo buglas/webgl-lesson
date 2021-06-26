@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>渐变</title>
+  <link rel="icon" href="https://img.kaikeba.com/kkb_portal_icon.ico">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+
+    #canvas {
+      background-color: antiquewhite;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <!-- 顶点着色器 -->
+  <script id="vertexShader" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    void main(){
+      gl_Position=a_Position;
+    }
+  </script>
+  <!-- 片元着色器 -->
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform vec2 u_CanvasSize;
+    //起始位
+    uniform vec2 u_Start;
+    //四阶矩阵
+    uniform mat4 u_ColorStops;
+    //一圈的弧度 360°=π*2 单位圆的周长 
+    //2πr- 2π*1=2π
+    float pi2=radians(360.0);
+
+    //获取片元颜色
+    vec4 getColor(vec4 colors[8],float ratios[8]){
+      //片元颜色
+      vec4 color=vec4(1);
+      //当前片元减起始片元的向量
+      vec2 sf=vec2(gl_FragCoord)-u_Start;
+      //当前片元相对于渐变起点的方向 [-π,π]-[0,2π]
+      float dir=atan(sf.y,sf.x);
+      if(dir<0.0){
+        dir+=pi2;
+      }
+      //极角比
+      float ratio=dir/pi2;
+      
+      //第一个比值
+      float ratio1=ratios[0];
+      //第一个颜色
+      vec4 color1=colors[0];
+      //遍历节点，按比值取色
+      for(int i=1;i<8;i++){
+        //第二个比值
+        float ratio2=ratios[i];
+        //第二个颜色
+        vec4 color2=colors[i];
+        if(ratio>=ratio1&&ratio<=ratio2){
+          //一段颜色的差值
+          vec4 color2_1=color2-color1;
+          //当前比值在一段比值中的比值
+          float ratioInRatio=(ratio-ratio1)/(ratio2-ratio1);
+          //当前比值在当前颜色段中所对应的颜色
+          color=color1+color2_1*ratioInRatio;
+          break;
+        }
+        ratio1=ratio2;
+        color1=color2;
+      }
+      return color;
+    }
+
+    void setColorStop(int rgb,int ar,out vec4 color,out float ratio){
+      //rgb=123000120  
+      int rc=rgb/1000000; //123
+      //(123000120-123000000)/1000=120/1000=0.12=0
+      int gc=(rgb-rc*1000000)/1000;
+      //123000120-123000000=120
+      int bc=rgb-int(rgb/1000)*1000;
+      int ac=ar/1000;
+      int ratioI=ar-ac*1000;
+      color=vec4(float(rc),float(gc),float(bc),float(ac))/255.0;
+      ratio=float(ratioI)/255.0;
+    }
+
+    void setColorStops(out vec4 colors[8],out float ratios[8]){
+      //节点颜色数据
+      vec4 colorSource=vec4(1);
+      //节点位置数据
+      float ratioSource=1.0;
+      //遍历四维矩阵的
+      for (int y=0;y<4;y++){
+          for (int x=0;x<2;x++){
+              int rgb=int(u_ColorStops[y][x*2]);
+              int ar=int(u_ColorStops[y][x*2+1]);
+              if(rgb>0){
+                  setColorStop(rgb,ar,colorSource,ratioSource);
+              }
+              colors[y*2+x]=colorSource;
+              ratios[y*2+x]=ratioSource;
+          }
+      }
+    }
+
+    void main(){
+      //节点颜色集合
+      vec4 colors[8];
+      //节点位置集合
+      float ratios[8];
+      //基于四维矩阵解析节点集合
+      setColorStops(colors,ratios);  
+      //片元颜色
+      gl_FragColor=getColor(colors,ratios);
+    }
+  </script>
+  <script type="module">
+    import { initShaders, parseColorStops } from "../jsm/Utils.js";
+    import Poly from './jsm/Poly.js'
+
+    const canvas = document.querySelector("#canvas");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // 获取着色器文本
+    const vsSource = document.querySelector("#vertexShader").innerText;
+    const fsSource = document.querySelector("#fragmentShader").innerText;
+
+    //三维画笔
+    const gl = canvas.getContext("webgl");
+
+    //初始化着色器
+    initShaders(gl, vsSource, fsSource);
+
+    //声明颜色 rgba
+    gl.clearColor(0, 0, 0, 1);
+
+    const source = new Float32Array([
+      -1, 1,
+      -1, -1,
+      1, 1,
+      1, -1
+    ]);
+
+    const colorStops = [
+      {
+        color: [123, 0, 123, 255],
+        stop: 0
+      },
+      {
+        color: [255, 0, 0, 255],
+        stop: 0.2
+      },
+      {
+        color: [255, 255, 0, 255],
+        stop: 0.4
+      },
+      {
+        color: [0, 255, 0, 255],
+        stop: 0.6
+      },
+      {
+        color: [0, 0, 200, 255],
+        stop: 0.8
+      },
+      {
+        color: [123, 0, 123, 255],
+        stop: 1
+      },
+    ]
+
+    const rect = new Poly({
+      gl,
+      source,
+      type: 'TRIANGLE_STRIP',
+      attributes: {
+        a_Position: {
+          size: 2,
+          index: 0
+        }
+      },
+      uniforms: {
+        u_Start: {
+          type: 'uniform2fv',
+          value: [canvas.width / 2, canvas.height / 2]
+        },
+        u_ColorStops: {
+          type: 'uniformMatrix4fv',
+          value: parseColorStops(colorStops)
+        }
+      }
+    })
+
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    rect.draw()
+
+  </script>
+</body>
+
+</html>

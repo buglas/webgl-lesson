@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>鼠标绘制面</title>
+  <link rel="icon" href="https://img.kaikeba.com/kkb_portal_icon.ico">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+
+    #canvas {
+      background-color: antiquewhite;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <!-- 顶点着色器 -->
+  <script id="vertexShader" type="x-shader/x-vertex">
+      attribute vec4 a_Position;
+      void main(){
+          gl_Position=a_Position;
+          gl_PointSize=5.0;
+      }
+    </script>
+  <!-- 片元着色器 -->
+  <script id="fragmentShader" type="x-shader/x-fragment">
+      void main(){
+        gl_FragColor=vec4(1,1,0,1);
+      }
+    </script>
+  <script type="module">
+    import { initShaders, getMousePosInWebgl } from "../jsm/Utils.js";
+    import Poly from '../jsm/Poly.js';
+    import ShapeGeo from "../jsm/ShapeGeo.js";
+
+    const canvas = document.querySelector("#canvas");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // 获取着色器文本
+    const vsSource = document.querySelector("#vertexShader").innerText;
+    const fsSource = document.querySelector("#fragmentShader").innerText;
+
+    //三维画笔
+    const gl = canvas.getContext("webgl");
+
+    //初始化着色器
+    initShaders(gl, vsSource, fsSource);
+
+
+    //声明颜色 rgba
+    gl.clearColor(0, 0, 0, 1);
+    //刷底色
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    const poly = new Poly({
+      gl,
+      types: ['POINTS', 'LINE_STRIP']
+    })
+
+    const face = new Poly({
+      gl,
+      types: ['TRIANGLES', 'POINTS'],
+    });
+
+    const arr = []
+    canvas.addEventListener('mousedown', (event) => {
+      const { x, y } = getMousePosInWebgl(event, canvas)
+      arr.push(x, y)
+
+
+      face.vertices = new ShapeGeo(arr).vertices
+      face.updateBuffer()
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      face.draw()
+    })
+
+
+  </script>
+</body>
+
+</html>

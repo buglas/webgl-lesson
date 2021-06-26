@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>js绘制随机透明度的星星</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+
+    #canvas {
+      background: url('./images/sky.jpg');
+      background-size: cover0;
+      background-position: right bottom;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+
+  <!-- 顶点着色器 -->
+  <script id="vertexShader" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    attribute float a_PointSize;
+    void main() {
+      gl_Position = a_Position;
+      gl_PointSize = a_PointSize;
+    }
+  </script>
+
+  <!-- 片元着色器 -->
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    //加精度
+    precision mediump float;
+    uniform vec4 u_FragColor;
+    void main() {
+      float dist = distance(gl_PointCoord, vec2(0.5,0.5));
+      if(dist < 0.5) {
+        gl_FragColor = u_FragColor;
+      }else {
+        discard;
+      }
+    }
+  </script>
+
+  <script type="module">
+    import { initShaders } from '../jsm/Utils.js'
+
+    const canvas = document.querySelector('#canvas')
+    canvas.width = window.innerWidth
+    canvas.height = window.innerHeight
+
+    const vsSource = document.getElementById('vertexShader').innerText
+    const fsSource = document.getElementById('fragmentShader').innerText
+
+    const gl = canvas.getContext('webgl')
+    initShaders(gl, vsSource, fsSource)
+
+    // gl.enable(gl.BLEND);
+    // gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+    // 设置attribute变量的值
+    //根据变量名获取变量的存储空间位置
+    const a_Position = gl.getAttribLocation(gl.program, 'a_Position')
+    const a_PointSize = gl.getAttribLocation(gl.program, 'a_PointSize')
+
+    const u_FragColor = gl.getUniformLocation(gl.program, 'u_FragColor')
+
+    const a_Points = []
+    render()
+
+    canvas.addEventListener('click', (e) => {
+      const { clientX, clientY } = e
+      console.log(clientX, clientY)
+      const { left, top, width, height } = canvas.getBoundingClientRect()
+
+      const [cssX, cssY] = [
+        clientX - left,
+        clientY - top
+      ]
+
+      //解决坐标原点的差异
+      const [halfWidth, halfHeight] = [width / 2, height / 2]
+      const [xBaseCenter, yBaseCenter] = [
+        cssX - halfWidth,
+        cssY - halfHeight
+      ]
+
+      //解决y方向差异
+      const yBaseCenterTop = -yBaseCenter
+
+      //解决坐标基底的差异
+      const [x, y] = [
+        xBaseCenter / halfWidth,
+        yBaseCenterTop / halfHeight
+      ]
+      const size = Math.random() * 20
+      const a = Math.random()
+      a_Points.push({ x, y, z: 0, size, a })
+      render()
+    })
+
+    function render() {
+      gl.clearColor(0, 0, 0, 0)
+      gl.clear(gl.COLOR_BUFFER_BIT)
+      a_Points.forEach(({ x, y, z, size, a }) => {
+        gl.vertexAttrib3f(a_Position, x, y, z)
+        gl.vertexAttrib1f(a_PointSize, size)
+        const arr = new Float32Array([0.87, 0.91, 1, a])
+        console.log(arr);
+        gl.uniform4fv(u_FragColor, arr)
+        gl.drawArrays(gl.POINTS, 0, 1)
+      })
+    }
+
+
+  </script>
+</body>
+
+</html>

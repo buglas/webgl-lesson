@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>旋转</title>
+  <link rel="icon" href="https://img.kaikeba.com/kkb_portal_icon.ico">
+</head>
+
+<body>
+  <script type="module">
+    import { Group, Matrix4, Object3D, Scene, Vector3, } from 'https://unpkg.com/three/build/three.module.js';
+
+    //世界坐标系-宇宙
+    const m1 = new Matrix4()
+    m1.elements = [
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
+      0, 0, 0, 1
+    ]
+
+    //本地坐标系-银河系
+    const ang2 = 20 * Math.PI / 180
+    const m2 = new Matrix4()
+    m2.makeRotationY(ang2)
+    m2.setPosition(1, 2, 3)
+
+    //本地坐标系-太阳系
+    const ang3 = 30 * Math.PI / 180
+    const m3 = new Matrix4()
+    m3.makeRotationZ(ang3)
+    m3.setPosition(4, 5, 6)
+
+    //本地坐标位-地球
+    const P3 = new Vector3(7, 8, 9)
+
+
+    //宇宙(世界坐标系是宇宙的本地坐标系)
+    const universe = new Scene()
+    universe.applyMatrix4(m1)
+
+    //银河系
+    const galaxy = new Group()
+    galaxy.applyMatrix4(m2)
+
+    //太阳系
+    const solar = new Group()
+    solar.applyMatrix4(m3)
+
+    //地球
+    const earth = new Object3D()
+    earth.position.copy(P3)
+
+    //包含关系
+    solar.add(earth)
+    galaxy.add(solar)
+    universe.add(galaxy)
+
+    //点P的世界位
+    const P1 = new Vector3()
+    earth.getWorldPosition(P1)
+    console.log(1);
+    console.log(P1);
+
+
+    //测试
+    {
+      const ang2 = -20 * Math.PI / 180
+      const ang3 = 30 * Math.PI / 180
+      const c2 = Math.cos(ang2)
+      const s2 = Math.sin(ang2)
+      const c3 = Math.cos(ang3)
+      const s3 = Math.sin(ang3)
+      const m2 = new Matrix4()
+      const P3 = new Vector3(7, 8, 9)
+      const m = new Matrix4()
+      m.elements = [
+        c2 * c3, s3, s2 * c3, 0,
+        -c2 * s3, c3, -s2 * s3, 0,
+        -s2, 0, c2, 0,
+        c2 * 4 - s2 * 6 + 1, 5 + 2, s2 * 4 + c2 * 6 + 3, 1
+      ]
+      const P1 = P3.applyMatrix4(m)
+      console.log(P1);
+    }
+
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>视图矩阵</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <script id="vertexShader" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    attribute vec2 a_Pin;
+    uniform mat4 u_Matrix;
+    varying vec2 v_Pin;
+    void main(){
+      gl_Position = u_Matrix*a_Position;
+      v_Pin=a_Pin;
+    }
+  </script>
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform sampler2D u_Sampler;
+    varying vec2 v_Pin;
+    void main(){
+      gl_FragColor=texture2D(u_Sampler,v_Pin);
+    }
+  </script>
+  <script type="module">
+    import { initShaders } from '../jsm/Utils.js';
+    import { Matrix4, Vector3, Quaternion, Euler } from 'https://unpkg.com/three/build/three.module.js';
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const gl = canvas.getContext('webgl');
+
+    const vsSource = document.getElementById('vertexShader').innerText;
+    const fsSource = document.getElementById('fragmentShader').innerText;
+    initShaders(gl, vsSource, fsSource);
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    gl.enable(gl.CULL_FACE);
+    gl.enable(gl.DEPTH_TEST);
+
+    //数据源
+    const source = new Float32Array([
+      //后-上左
+      -0.5, -0.5, -0.5, 0, 0,
+      -0.5, 0.5, -0.5, 0, 0.5,
+      0.5, -0.5, -0.5, 0.25, 0,
+      -0.5, 0.5, -0.5, 0, 0.5,
+      0.5, 0.5, -0.5, 0.25, 0.5,
+      0.5, -0.5, -0.5, 0.25, 0,
+
+      //前 -上中
+      -0.5, -0.5, 0.5, 0.25, 0,
+      0.5, -0.5, 0.5, 0.5, 0,
+      -0.5, 0.5, 0.5, 0.25, 0.5,
+      -0.5, 0.5, 0.5, 0.25, 0.5,
+      0.5, -0.5, 0.5, 0.5, 0,
+      0.5, 0.5, 0.5, 0.5, 0.5,
+
+      //上-上右
+      -0.5, 0.5, -0.5, 0.5, 0,
+      -0.5, 0.5, 0.5, 0.5, 0.5,
+      0.5, 0.5, -0.5, 0.75, 0,
+      -0.5, 0.5, 0.5, 0.5, 0.5,
+      0.5, 0.5, 0.5, 0.75, 0.5,
+      0.5, 0.5, -0.5, 0.75, 0,
+
+      //下-下左
+      -0.5, -0.5, -0.5, 0, 0.5,
+      0.5, -0.5, -0.5, 0.25, 0.5,
+      -0.5, -0.5, 0.5, 0, 1,
+      -0.5, -0.5, 0.5, 0, 1,
+      0.5, -0.5, -0.5, 0.25, 0.5,
+      0.5, -0.5, 0.5, 0.25, 1,
+
+      // 左-下中
+      -0.5, -0.5, -0.5, 0.25, 0.5,
+      -0.5, -0.5, 0.5, 0.25, 1,
+      -0.5, 0.5, -0.5, 0.5, 0.5,
+      -0.5, -0.5, 0.5, 0.25, 1,
+      -0.5, 0.5, 0.5, 0.5, 1,
+      -0.5, 0.5, -0.5, 0.5, 0.5,
+
+      // 右-下右
+      0.5, -0.5, -0.5, 0.5, 0.5,
+      0.5, 0.5, -0.5, 0.75, 0.5,
+      0.5, -0.5, 0.5, 0.5, 1,
+      0.5, -0.5, 0.5, 0.5, 1,
+      0.5, 0.5, -0.5, 0.75, 0.5,
+      0.5, 0.5, 0.5, 0.75, 1,
+    ]);
+    const FSIZE = source.BYTES_PER_ELEMENT;
+    //元素字节数
+    const elementBytes = source.BYTES_PER_ELEMENT
+    //系列尺寸
+    const posSize = 3
+    const pinSize = 2
+    //类目尺寸
+    const categorySize = posSize + pinSize
+    //类目字节数
+    const categoryBytes = categorySize * elementBytes
+    //系列字节索引位置
+    const posByteIndex = 0
+    const pinByteIndex = posSize * elementBytes
+    //顶点总数
+    const sourceSize = source.length / categorySize
+
+
+    const sourceBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, sourceBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, source, gl.STATIC_DRAW);
+
+    const a_Position = gl.getAttribLocation(gl.program, 'a_Position');
+    gl.vertexAttribPointer(
+      a_Position,
+      posSize,
+      gl.FLOAT,
+      false,
+      categoryBytes,
+      posByteIndex
+    );
+    gl.enableVertexAttribArray(a_Position);
+
+    const a_Pin = gl.getAttribLocation(gl.program, 'a_Pin');
+    gl.vertexAttribPointer(
+      a_Pin,
+      pinSize,
+      gl.FLOAT,
+      false,
+      categoryBytes,
+      pinByteIndex
+    );
+    gl.enableVertexAttribArray(a_Pin);
+
+
+    //模型矩阵
+    const u_Matrix = gl.getUniformLocation(gl.program, 'u_Matrix')
+
+    /* 视点，目标点，上方向 */
+    const e = new Vector3(-0.5, 0, 1)
+    const t = new Vector3(0, 0, 0)
+    const u = new Vector3(0, 1, 0)
+
+    const c = new Vector3().subVectors(e, t)
+    c.normalize()
+    const a = new Vector3().crossVectors(u, c)
+    a.normalize()
+    const b = new Vector3().crossVectors(c, a)
+    b.normalize()
+    const viewMatrix = [
+      a.x, b.x, c.x, 0,
+      a.y, b.y, c.y, 0,
+      a.z, b.z, c.z, 0,
+      0, 0, 0, 1
+    ]
+
+    gl.uniformMatrix4fv(u_Matrix, false, viewMatrix)
+
+    /* 图像预处理 */
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1)
+
+    /* 准备三个角色 */
+    gl.activeTexture(gl.TEXTURE0)
+    const texture = gl.createTexture()
+    gl.bindTexture(gl.TEXTURE_2D, texture)
+    const image = new Image()
+    image.src = './images/mf.jpg'
+    image.onload = function () {
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.RGBA,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        image
+      )
+
+
+      gl.texParameteri(
+        gl.TEXTURE_2D,
+        gl.TEXTURE_MIN_FILTER,
+        gl.LINEAR
+      );
+
+      const u_Sampler = gl.getUniformLocation(gl.program, 'u_Sampler')
+      gl.uniform1i(u_Sampler, 0)
+
+      render()
+    }
+
+    //渲染
+    function render() {
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.drawArrays(gl.TRIANGLES, 0, sourceSize);
+    }
+
+  </script>
+</body>
+
+</html>

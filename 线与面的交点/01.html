@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>视图矩阵</title>
+  <link rel="icon" href="https://img.kaikeba.com/kkb_portal_icon.ico">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <script id="vertexShader" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    uniform mat4 u_ViewMatrix;
+    void main(){
+      gl_Position = u_ViewMatrix*a_Position;
+      gl_PointSize=20.0;
+    }
+  </script>
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    void main(){
+      gl_FragColor=vec4(1.0,1.0,1.0,1.0);
+    }
+  </script>
+  <script type="module">
+    import { initShaders, glToCanvasPos, getMousePosInWebgl } from '../jsm/Utils.js';
+    import { Matrix4, Vector3, Quaternion, Plane, Ray } from 'https://unpkg.com/three/build/three.module.js';
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const gl = canvas.getContext('webgl');
+
+    const vsSource = document.getElementById('vertexShader').innerText;
+    const fsSource = document.getElementById('fragmentShader').innerText;
+    initShaders(gl, vsSource, fsSource);
+
+    const vertices = [
+      -0.5, 0, -0.5,
+      -0.5, 0, 0.5,
+      0.5, 0, 0.5,
+      0.5, 0, -0.5
+    ]
+
+    const vertexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array(vertices),
+      gl.STATIC_DRAW
+    );
+    const a_Position = gl.getAttribLocation(gl.program, 'a_Position');
+    gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(a_Position);
+
+    const u_ViewMatrix = gl.getUniformLocation(gl.program, 'u_ViewMatrix')
+    const e = new Vector3(-0.2, -0.2, 1)
+    let matrix = new Matrix4().lookAt(
+      e,
+      new Vector3(0, 0, 0),
+      new Vector3(0, 1, 0)
+    )
+    gl.uniformMatrix4fv(u_ViewMatrix, false, matrix.elements)
+
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.drawArrays(gl.POINTS, 0, vertices.length / 3);
+
+
+
+    let n = -1
+    let a = 1
+    !(function ani() {
+      n += 0.02 * a
+      if (n > 1 || n < -1) {
+        a *= -1
+      }
+      e.y = n
+      matrix = new Matrix4().lookAt(
+        e,
+        new Vector3(0, 0, 0),
+        new Vector3(0, 1, 0)
+      )
+      gl.uniformMatrix4fv(u_ViewMatrix, false, matrix.elements)
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.drawArrays(gl.POINTS, 0, vertices.length / 3);
+      requestAnimationFrame(ani)
+    })()
+
+
+    canvas.addEventListener('click', event => {
+      //获取鼠标在裁剪空间中的位置
+      const p = getMousePosInWebgl(event, canvas)
+      const m2 = matrix.clone().invert()
+      const p2 = new Vector3(p.x, p.y, 0).applyMatrix4(m2)
+      const plane = new Plane(new Vector3(0, 1, 0), 0)
+      const ray = new Ray(e, p2.sub(e))
+      const p3 = new Vector3()
+      ray.intersectPlane(plane, p3)
+      console.log(p3);
+      // vertices.push(p3.x, p3.y, p3.z)
+      vertices.push(p2.x, p2.y, p2.z)
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array(vertices),
+        gl.STATIC_DRAW
+      );
+    })
+
+
+
+  </script>
+</body>
+
+</html>

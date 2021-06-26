@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>矩阵输出</title>
+  <link rel="icon" href="https://img.kaikeba.com/kkb_portal_icon.ico">
+  <style>
+    body {
+      margin: 0;
+    }
+
+    #canvas {
+      background-color: antiquewhite;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <!-- 顶点着色器 -->
+  <script id="vertexShader" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    void main(){
+        gl_Position=a_Position;
+        gl_PointSize=512.0;
+    }
+  </script>
+  <!-- 片元着色器 -->
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    precision mediump float;
+    mat4 m4=mat4(
+      255,0,0,255,
+      255,255,0,255,
+      0,255,0,255,
+      0,0,255,255
+    );
+    void main(){
+      float dist=distance(gl_PointCoord,vec2(0.5,0.5));
+      if(dist>=0.0&&dist<0.125){
+        gl_FragColor=m4[0]/255.0;
+      }else if(dist>=0.125&&dist<0.25){
+        gl_FragColor=m4[1]/255.0;
+      }else if(dist>=0.25&&dist<0.375){
+        gl_FragColor=m4[2]/255.0;
+      }else if(dist>=0.325&&dist<0.5){
+        gl_FragColor=m4[3]/255.0;
+      }else{
+        discard;
+      }
+    }
+  </script>
+  <script type="module">
+    import { initShaders } from "../jsm/Utils.js";
+
+    const canvas = document.querySelector("#canvas");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // 获取着色器文本
+    const vsSource = document.querySelector("#vertexShader").innerText;
+    const fsSource = document.querySelector("#fragmentShader").innerText;
+
+    //三维画笔
+    const gl = canvas.getContext("webgl", {
+      alpha: true,
+      preserveDrawingBuffer: true
+    });
+
+    //初始化着色器
+    initShaders(gl, vsSource, fsSource);
+
+    //声明颜色 rgba
+    gl.clearColor(0, 0, 0, 1);
+    //刷底色
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    //绘制顶点
+    gl.drawArrays(gl.POINTS, 0, 1);
+
+
+    //计算像素图中每个向量的宽度
+    const vw = 512 / 8;
+    for (let i = 0; i < 4; i++) {
+      logPixel(vw * i + vw / 2)
+    }
+
+    function logPixel(offset = 0) {
+      //建立像素集合
+      let pixel = new Uint8Array(4);
+      //从缓冲区读取像素数据，然后将其装到事先建立好的像素集合里
+      gl.readPixels(
+        canvas.width / 2 + offset,
+        canvas.height / 2,
+        1,
+        1,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        pixel
+      );
+      console.log(pixel);
+    }
+  </script>
+</body>
+
+</html>

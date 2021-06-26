@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>视图矩阵</title>
+  <link rel="icon" href="https://img.kaikeba.com/kkb_portal_icon.ico">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <script id="vertexShader" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    uniform mat4 u_ViewMatrix;
+    void main(){
+      float f=2>3?1.0:2.0;
+      gl_Position = u_ViewMatrix*a_Position;
+      gl_PointSize=5.0;
+    }
+  </script>
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    void main(){
+      gl_FragColor=vec4(1.0,1.0,1.0,1.0);
+    }
+  </script>
+  <script type="module">
+    import { initShaders, glToCanvasPos, getMousePosInWebgl } from '../jsm/Utils.js';
+    import { Matrix4, Vector3, Quaternion, Plane, Ray } from 'https://unpkg.com/three/build/three.module.js';
+    import Poly from './jsm/Poly.js';
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const gl = canvas.getContext('webgl');
+
+    const vsSource = document.getElementById('vertexShader').innerText;
+    const fsSource = document.getElementById('fragmentShader').innerText;
+    initShaders(gl, vsSource, fsSource);
+
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+
+
+    const rec = [
+      -0.5, 0, -0.5,
+      -0.5, 0, 0.5,
+      0.5, 0, 0.5,
+      0.5, 0, -0.5,
+    ]
+
+    const r = 0.2
+    const segs = 24
+    const space = Math.PI * 2 / segs
+
+    const E = new Vector3(0, 0.5, 0)
+    let source = null
+    let n = null
+    let A = null
+
+    let ey = -1
+    let dir = 1
+
+    let matrix = new Matrix4().lookAt(
+      new Vector3(0, .1, 1),
+      new Vector3(0, 0, 0),
+      new Vector3(0, 1, 0)
+    )
+
+    const poly = new Poly({
+      gl,
+      uniforms: {
+        u_ViewMatrix: {
+          type: 'uniformMatrix4fv',
+          value: matrix.elements
+        }
+      },
+      attributes: {
+        a_Position: {
+          size: 3,
+          index: 0
+        }
+      }
+    })
+
+    let angle = 0
+    !(function ani() {
+      angle += 0.01
+      const cos = Math.cos(angle)
+      const sin = Math.sin(angle)
+      source = []
+      n = new Vector3(0, cos, sin)
+      const arr = []
+      for (let i = 0; i < rec.length; i += 3) {
+        const z = rec[i + 1] * sin - rec[i + 2] * cos
+        const y = rec[i + 1] * cos - rec[i + 2] * sin
+        const x = rec[i]
+        arr.push(x, y, z)
+      }
+      A = new Vector3(source[0], source[1], source[2])
+      crtPs()
+      source.push(E.x, E.y, E.z, ...arr)
+
+      poly.source = source
+
+      poly.init()
+
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      poly.draw()
+
+
+
+
+      requestAnimationFrame(ani)
+    })()
+
+
+    function crtPs() {
+      for (let i = 0; i < segs; i++) {
+        const ang = space * i
+        const cos = Math.cos(ang)
+        const sin = Math.sin(ang)
+
+        const T = new Vector3(sin * r, 0.2, cos * r)
+        const v = new Vector3().subVectors(T, E)
+
+        const EA = new Vector3().subVectors(A, E)
+        const lam = EA.dot(n) / v.clone().dot(n)
+        const M = v.clone().multiplyScalar(lam).add(E)
+
+        source.push(T.x, T.y, T.z)
+        source.push(M.x, M.y, M.z)
+      }
+    }
+
+    function setVm() {
+      ey += 0.02 * dir
+      if (ey > 1 || ey < -1) {
+        dir *= -1
+      }
+      matrix = new Matrix4().lookAt(
+        new Vector3(-0.2, ey, 1),
+        new Vector3(0, 0, 0),
+        new Vector3(0, 1, 0)
+      )
+      poly.uniforms.u_ViewMatrix.value = matrix.elements
+    }
+
+
+  </script>
+</body>
+
+</html>

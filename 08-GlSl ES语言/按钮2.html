@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>按钮</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: #333;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <script id="vertexShader" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    void main(){
+        gl_Position=a_Position;
+    }
+  </script>
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform vec2 u_CanvasSize;
+    vec2 center=u_CanvasSize/2.0;
+    float len1=length(center);
+    float pi=radians(360.0)/2.0;
+
+    //渐变
+    float texture1(float x){
+      float a=x/u_CanvasSize.x;
+      float b=radians(360.0)*5.0*a;
+      return (sin(b)+1.0)/2.0;
+    }
+
+    //水平拉丝
+    float texture2(vec2 v){
+      vec2 a= vec2(0.0,1.0);
+      float n= dot(v,a);
+      return fract(tan(n)*10000.0);
+    }
+
+    //杂色
+    float texture3(vec2 v){
+      vec2 a= vec2(0.1234,0.5678);
+      float n= dot(v,a);
+      return fract(tan(n)*10000.0);
+    }
+
+    //比例尺
+    float scaler(float ax,float ay,float bx,float by,float x){
+      float x1=bx-ax;
+      float y1=by-ay;
+      float k=y1/x1;
+      float b=ay-ax*k;
+      return k*x+b;
+    }
+    
+
+    void main(){
+      //极坐标系转二维直角坐标系
+      vec2 p=gl_FragCoord.xy-center;
+      float len2=length(p);
+      float ang=atan(p.y,p.x);
+      float x=scaler(-pi,0.0,pi,u_CanvasSize.x,ang);
+      float y=(len2/len1)*u_CanvasSize.y;
+
+      //渐变
+      float f1 = texture1(x); 
+      f1=0.65*f1+0.35;
+
+      //拉丝
+      float f2 = texture2(vec2(int(x),int(y))); 
+      f2=clamp(f2,0.75,0.8);
+
+      //杂色
+      float f3 = texture3(gl_FragCoord.xy); 
+
+      //复合颜色
+      float f=(f1*f2+f3*0.07)*1.2;
+
+      //初始半径
+      float r1=150.0;
+      //初始方向
+      float cos=cos(ang);
+      float sin=sin(ang);
+      vec3 dir=vec3(cos,sin,0.0);
+      //平行光方向
+      vec3 lightDir=normalize(vec3(0.5,-1,1));
+
+
+      //扩展1
+      float expand2=6.0;
+      float r2=r1+expand2;
+      vec3 p2=vec3(cos*expand2,sin*expand2,-expand2);
+      //二面棱
+      vec3 l2=cross(p2,dir);
+      //扩展面的法线
+      vec3 normal2=normalize(cross(l2,p2));
+      //光线与法线的夹角
+      float cosAng2=dot(normal2,lightDir)+0.3;
+
+      if(len2<r1){
+        gl_FragColor = vec4(vec3(f), 1);
+      }else if(len2>=r1&&len2<r2){
+        f*=cosAng2;
+      }
+
+      /*
+      //扩展2
+      float expand3=12.0;
+      float r3=r2+expand3;
+      vec3 p3=vec3(cos*expand3,sin*expand3,-expand3);
+      //二面棱
+      vec3 l3=cross(p3,dir);
+      //扩展面的法线
+      vec3 normal3=normalize(cross(l3,p3));
+      //光线与法线的夹角
+      float cosAng3=dot(normal3,lightDir);
+
+      if(len2<r1){
+        gl_FragColor = vec4(vec3(f), 1);
+      }else if(len2>=r1&&len2<r2){
+        f*=cosAng2;
+      }else if(len2>=r2&&len2<r3){
+        f*=cosAng3;
+      }
+      */
+      gl_FragColor = vec4(vec3(f), 1);
+      
+    }
+  </script>
+  <script type="module">
+    import { initShaders } from '../jsm/Utils.js';
+    import Poly from './jsm/Poly.js';
+
+
+    const canvas = document.getElementById('canvas');
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const gl = canvas.getContext('webgl');
+
+    const vsSource = document.getElementById('vertexShader').innerText;
+    const fsSource = document.getElementById('fragmentShader').innerText;
+    initShaders(gl, vsSource, fsSource);
+    gl.clearColor(0, 0, 0, 1);
+
+
+    const source = new Float32Array([
+      -1, 1,
+      -1, -1,
+      1, 1,
+      1, -1
+    ]);
+
+    const rect = new Poly({
+      gl,
+      source,
+      type: 'TRIANGLE_STRIP',
+      attributes: {
+        a_Position: {
+          size: 2,
+          index: 0
+        }
+      },
+      uniforms: {
+        u_CanvasSize: {
+          type: 'uniform2fv',
+          value: [canvas.width, canvas.height]
+        }
+      }
+    })
+
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    rect.draw()
+
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>正弦曲线</title>
+  <link rel="icon" href="https://img.kaikeba.com/kkb_portal_icon.ico">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <script id="vertexShader" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    uniform mat4 u_ViewMatrix;
+    void main(){
+      gl_Position = u_ViewMatrix*a_Position;
+      gl_PointSize=3.0;
+    }
+  </script>
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    void main(){
+      gl_FragColor=vec4(1.0,1.0,1.0,1.0);
+    }
+  </script>
+  <script type="module">
+    import { initShaders, getMousePosInWebgl, ScaleLinear } from '../jsm/Utils.js';
+    import { Matrix4, Vector3, Quaternion, Plane, Ray } from 'https://unpkg.com/three/build/three.module.js';
+    import Poly from './jsm/Poly.js';
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const gl = canvas.getContext('webgl');
+
+    const vsSource = document.getElementById('vertexShader').innerText;
+    const fsSource = document.getElementById('fragmentShader').innerText;
+    initShaders(gl, vsSource, fsSource);
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+
+
+    /* 视图矩阵 */
+    const viewMatrix = new Matrix4().lookAt(
+      new Vector3(0.2, 0.3, 1),
+      new Vector3(),
+      new Vector3(0, 1, 0)
+    )
+
+
+    /* x,z 方向的空间坐标极值 */
+    const [minPosX, maxPosX, minPosZ, maxPosZ] = [
+      -0.7, 0.8, -1, 1
+    ]
+    /* x,z 方向的弧度极值 */
+    const [minAngX, maxAngX, minAngZ, maxAngZ] = [
+      0, Math.PI * 4, 0, Math.PI * 2
+    ]
+
+    /* 比例尺：将空间坐标和弧度相映射 */
+    const scalerX = ScaleLinear(minPosX, minAngX, maxPosX, maxAngX)
+    const scalerZ = ScaleLinear(minPosZ, minAngZ, maxPosZ, maxAngZ)
+
+    /* 波浪对象 */
+    const wave = new Poly({
+      gl,
+      vertices: crtVertices(),
+      uniforms: {
+        u_ViewMatrix: {
+          type: 'uniformMatrix4fv',
+          value: viewMatrix.elements
+        },
+      }
+    })
+
+    updateVertices()
+    wave.updateBuffer()
+    gl.clear(gl.COLOR_BUFFER_BIT)
+    wave.draw()
+
+    /* 建立顶点集合 */
+    function crtVertices(offset = 0) {
+      const vertices = []
+      for (let z = minPosZ; z < maxPosZ; z += 0.04) {
+        for (let x = minPosX; x < maxPosX; x += 0.03) {
+          vertices.push(x, 0, z)
+        }
+      }
+      return vertices
+    }
+
+    //更新顶点高度
+    function updateVertices() {
+      const { vertices } = wave
+      for (let i = 0; i < vertices.length; i += 3) {
+        const [posX, posZ] = [vertices[i], vertices[i + 2]]
+        const angZ = scalerZ(posZ)
+        const Omega = 2
+        // const a = 0.05
+        // const phi = 0
+        const a = Math.sin(angZ) * 0.1 + 0.03
+        const phi = scalerX(posX)
+        vertices[i + 1] = SinFn(a, Omega, phi)(angZ)
+      }
+    }
+
+    /* 正弦函数 */
+    function SinFn(a, Omega, phi) {
+      return function (x) {
+        return a * Math.sin(Omega * x + phi);
+      }
+    }
+
+
+
+
+  </script>
+</body>
+
+</html>

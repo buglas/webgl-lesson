@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>绘制圆点</title>
+  <link rel="icon" href="https://img.kaikeba.com/kkb_portal_icon.ico">
+  <style>
+    body {
+      margin: 0;
+    }
+
+    #canvas {
+      background-color: antiquewhite;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <!-- 顶点着色器 -->
+  <script id="vertexShader" type="x-shader/x-vertex">
+      attribute vec4 a_Position;
+      void main(){
+          //点位
+          gl_Position=a_Position;
+          //尺寸
+          gl_PointSize=1024.0;
+      }
+    </script>
+  <!-- 片元着色器 -->
+  <!-- 
+    点的尺寸是1024
+    可先用其中所有像素rgba的和表示整数
+    [-512*4*255,512*4*255]
+    [-522240,522240]
+
+
+   -->
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    precision mediump float;
+    //float m=1024.0*512.0*4.0*255.0
+    float m=534773760.0;
+    //float m=25500.0;
+    //float a=m/255.0;
+    float a=2550.0;
+    float n=1000.0;
+    float size=1024.0;
+    void main(){
+      float y=gl_PointCoord.y*size;
+      float x=gl_PointCoord.x*size;
+      float i=(y*size+x)*4.0;
+      vec4 v=vec4(0.0,0.0,0.0,0.0);
+      
+      for(int j=0;j<4;j++){
+        float b=i+float(j);
+        float dis=b-a;
+        if(a>=b){
+          v[j]=1.0;
+        }else if(dis<1.0){
+          v[j]=dis;
+        }
+      }
+      gl_FragColor=v;
+      //gl_FragColor=vec4(1.0,1.0,1.0,1.0);
+      
+    }
+  </script>
+  <script type="module">
+    import { initShaders } from "../jsm/Utils.js";
+
+    const canvas = document.querySelector("#canvas");
+    // canvas.width = window.innerWidth;
+    // canvas.height = window.innerHeight;
+    const size = 1024;
+    canvas.width = size;
+    canvas.height = size;
+
+    // 获取着色器文本
+    const vsSource = document.querySelector("#vertexShader").innerText;
+    const fsSource = document.querySelector("#fragmentShader").innerText;
+
+    //三维画笔
+    const gl = canvas.getContext("webgl", {
+      alpha: true,
+      preserveDrawingBuffer: true
+    });
+    // gl.enable(gl.BLEND);
+    // gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+    //初始化着色器
+    initShaders(gl, vsSource, fsSource);
+
+    //声明颜色 rgba
+    gl.clearColor(0, 0, 0, 1);
+    //刷底色
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    //绘制顶点
+    gl.drawArrays(gl.POINTS, 0, 1);
+
+    //建立像素集合
+    let pixels = new Uint8Array(size * size * 4);
+    //从缓冲区读取像素数据，然后将其装到事先建立好的像素集合里
+    gl.readPixels(0, 0, size, size, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+    console.log(pixels);
+    const sum = eval(pixels.join("+"))
+    console.log(sum);
+  </script>
+</body>
+
+</html>

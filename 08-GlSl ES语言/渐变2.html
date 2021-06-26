@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>渐变</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: blanchedalmond;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <script id="vertexShader" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    void main(){
+        gl_Position=a_Position;
+    }
+  </script>
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    precision mediump float;
+
+    uniform vec4 u_Color0;
+    uniform vec4 u_Color1;
+    vec4 c01=u_Color1-u_Color0;
+
+    uniform vec2 u_Start;
+    uniform vec2 u_End;
+    vec2 se=u_End-u_Start;
+    float seLen=length(se);
+    vec2 normal=normalize(se);
+
+    void main(){
+      vec2 sf=vec2(gl_FragCoord)-u_Start;
+      float fsLen=clamp(dot(sf,normal),0.0,seLen);
+      float ratio=fsLen/seLen;
+      gl_FragColor=u_Color0+c01*ratio;
+    }
+  </script>
+  <script type="module">
+    import { initShaders } from '../jsm/Utils.js';
+    import Poly from './jsm/Poly.js';
+
+
+    const canvas = document.getElementById('canvas');
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const gl = canvas.getContext('webgl');
+
+    const vsSource = document.getElementById('vertexShader').innerText;
+    const fsSource = document.getElementById('fragmentShader').innerText;
+    initShaders(gl, vsSource, fsSource);
+    gl.clearColor(0, 0, 0, 1);
+
+    const source = new Float32Array([
+      -1, 1,
+      -1, -1,
+      1, 1,
+      1, -1
+    ]);
+
+    const rect = new Poly({
+      gl,
+      source,
+      type: 'TRIANGLE_STRIP',
+      attributes: {
+        a_Position: {
+          size: 2,
+          index: 0
+        }
+      },
+      uniforms: {
+        u_Start: {
+          type: 'uniform2fv',
+          value: [canvas.width * 0.25, canvas.height * 0.75]
+        },
+        u_End: {
+          type: 'uniform2fv',
+          value: [canvas.width * 0.75, canvas.height * 0.25]
+        },
+        u_Color0: {
+          type: 'uniform4fv',
+          value: [1, 0, 0, 1]
+        },
+        u_Color1: {
+          type: 'uniform4fv',
+          value: [1, 1, 0, 1]
+        },
+      }
+    })
+
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    rect.draw()
+
+  </script>
+</body>
+
+</html>

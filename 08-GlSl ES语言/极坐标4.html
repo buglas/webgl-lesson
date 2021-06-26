@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>极坐标2</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: blanchedalmond;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <script id="vertexShader" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    attribute vec2 a_Pin;
+    varying vec2 v_Pin;
+    void main(){
+        gl_Position=a_Position;
+        v_Pin=a_Pin;
+    }
+  </script>
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform vec2 u_CanvasSize;
+    uniform sampler2D u_Sampler;
+    varying vec2 v_Pin;
+
+    float scaler(float ax,float ay,float bx,float by,float x){
+      float x1=bx-ax;
+      float y1=by-ay;
+      float k=y1/x1;
+      float b=ay-ax*k;
+      return k*x+b;
+    }
+
+    void main(){
+      vec2 center=u_CanvasSize/2.0;
+      vec2 p=gl_FragCoord.xy-center;
+      float ang=atan(p.y,p.x);
+      float pi=radians(360.0)/2.0;
+      float x=scaler(-pi,0.0,pi,1.0,ang);
+
+      //float ang2=abs(mod(ang,pi/4.0));
+      //float len1=length(p);
+      //float len2=cos(ang)/center.x;
+      
+      //float y=length(p)/length(center);
+
+      float ang2=abs(ang);
+      float k=0.0;
+      float l=0.0;
+      vec2 v2=vec2(0,0);
+      if(ang2>pi*0.25&&ang2<pi*0.75){
+        k=abs(p.x/p.y);
+        v2.y=center.y;
+        v2.x=k*center.y;
+      }else{
+        k=abs(p.y/p.x);
+        v2.x=center.x;
+        v2.y=k*center.x;
+      }
+      float len1=length(v2);
+      //float len1=length(center);
+      float len2=length(p);
+      float y=len2/len1;
+      
+      gl_FragColor=texture2D(u_Sampler,vec2(x,y));
+      //gl_FragColor=texture2D(u_Sampler,vec2(x,1.0-y));
+      //gl_FragColor=texture2D(u_Sampler,v_Pin);
+    }
+  </script>
+  <script type="module">
+    import { initShaders } from '../jsm/Utils.js';
+    import Poly from './jsm/Poly.js';
+
+
+    const canvas = document.getElementById('canvas');
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const gl = canvas.getContext('webgl');
+
+    const vsSource = document.getElementById('vertexShader').innerText;
+    const fsSource = document.getElementById('fragmentShader').innerText;
+    initShaders(gl, vsSource, fsSource);
+    gl.clearColor(0, 0, 0, 1);
+
+    const source = new Float32Array([
+      -1, 1, 0, 1,
+      -1, -1, 0, 0,
+      1, 1, 1, 1,
+      1, -1, 1, 0
+    ]);
+
+    const rect = new Poly({
+      gl,
+      source,
+      type: 'TRIANGLE_STRIP',
+      attributes: {
+        a_Position: {
+          size: 2,
+          index: 0
+        },
+        a_Pin: {
+          size: 2,
+          index: 2
+        },
+      },
+      uniforms: {
+        u_CanvasSize: {
+          type: 'uniform2fv',
+          value: [canvas.width, canvas.height]
+        }
+      }
+    })
+
+    const image = new Image()
+    image.src = './images/room.jpg'
+    image.onload = function () {
+      rect.maps = {
+        u_Sampler: { image },
+      }
+      rect.updateMaps()
+      render()
+    }
+
+    //渲染
+    function render() {
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      rect.draw()
+    }
+
+  </script>
+</body>
+
+</html>
