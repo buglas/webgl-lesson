@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>旋转</title>
+  <link rel="icon" href="https://img.kaikeba.com/kkb_portal_icon.ico">
+</head>
+
+<body>
+  <script type="module">
+    import { Group, Matrix4, Object3D, Scene, Vector3, Euler, Quaternion } from 'https://unpkg.com/three/build/three.module.js';
+
+    const OC2 = new Vector3(3, 2, 1).normalize()
+    const ang = 2
+    const P1 = new Vector3(1, 5, 3)
+
+    const B2OB1 = Math.atan2(OC2.y, OC2.z)
+    const mx1 = new Matrix4().makeRotationX(B2OB1)
+    const mx2 = new Matrix4().makeRotationX(-B2OB1)
+
+    const OC3 = OC2.clone()
+    OC3.applyMatrix4(mx1)
+
+    const C3OB1 = Math.atan2(OC3.x, OC3.z)
+    const my1 = new Matrix4().makeRotationY(-C3OB1)
+    const my2 = new Matrix4().makeRotationY(C3OB1)
+
+    const P2 = P1.clone()
+    P2.applyMatrix4(mx1)
+    P2.applyMatrix4(my1)
+
+    const mz = new Matrix4().makeRotationZ(ang)
+    P2.applyMatrix4(mz)
+
+    P2.applyMatrix4(my2)
+    P2.applyMatrix4(mx2)
+
+    console.log(P2);
+    const quaternion = new Quaternion();
+    quaternion.setFromAxisAngle(OC2, ang);
+    const m = new Matrix4()
+    m.makeRotationFromQuaternion(quaternion)
+    console.log(
+      P1.clone().applyMatrix4(m)
+    );
+
+
+  </script>
+</body>
+
+</html>

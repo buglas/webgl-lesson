@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>js改变点位</title>
+  <link rel="icon" href="https://img.kaikeba.com/kkb_portal_icon.ico">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+
+    #canvas {
+      background-color: antiquewhite;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <!-- 顶点着色器 -->
+  <script id="vertexShader" type="x-shader/x-vertex">
+      attribute vec4 a_Position;
+      void main(){
+          //点位
+          gl_Position=a_Position;
+          //尺寸
+          gl_PointSize=50.0;
+      }
+    </script>
+  <!-- 片元着色器 -->
+  <script id="fragmentShader" type="x-shader/x-fragment">
+      void main(){
+          gl_FragColor=vec4(1,1,0,1);
+      }
+    </script>
+  <script type="module">
+    import { initShaders } from "../jsm/Utils.js";
+
+    const canvas = document.querySelector("#canvas");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // 获取着色器文本
+    const vsSource = document.querySelector("#vertexShader").innerText;
+    const fsSource = document.querySelector("#fragmentShader").innerText;
+
+    //三维画笔
+    const gl = canvas.getContext("webgl");
+
+    //初始化着色器
+    initShaders(gl, vsSource, fsSource);
+
+    //声明颜色 rgba
+    gl.clearColor(0, 0, 0, 1);
+    //刷底色
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    //设置attribute 变量
+    // a_Position=vec4(1,0,0,1)
+    const a_Position = gl.getAttribLocation(gl.program, "a_Position");
+
+    //修改attribute 变量
+    // gl.vertexAttrib3f(a_Position, 0, 1, 0);
+    // gl.vertexAttrib2f(a_Position, 0.5, 0.5);
+    gl.vertexAttrib1f(a_Position, 0.1);
+
+    //绘制顶点
+    gl.drawArrays(gl.POINTS, 0, 1);
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>旋转</title>
+  <link rel="icon" href="https://img.kaikeba.com/kkb_portal_icon.ico">
+</head>
+
+<body>
+  <script type="module">
+    import { Group, Matrix4, Object3D, Scene, Vector3, } from 'https://unpkg.com/three/build/three.module.js';
+
+    const ang = 30 * Math.PI / 180;
+    const m = new Matrix4()
+
+    //绕x轴逆时针旋转30°
+    {
+      m.makeRotationX(ang)
+      console.log(...m.elements);
+
+      const c = Math.cos(ang)
+      const s = Math.sin(ang)
+      console.log(
+        1, 0, 0, 0,
+        0, c, s, 0,
+        0, -s, c, 0,
+        0, 0, 0, 1,
+      );
+    }
+
+    //绕y轴逆时针旋转30°
+    {
+      m.makeRotationY(ang)
+      console.log(...m.elements);
+
+      const c = Math.cos(-ang)
+      const s = Math.sin(-ang)
+      console.log(
+        c, 0, s, 0,
+        0, 1, 0, 0,
+        -s, 0, c, 0,
+        0, 0, 0, 1,
+      );
+    }
+
+    //绕z轴逆时针旋转30°
+    {
+      m.makeRotationZ(ang)
+      console.log(...m.elements);
+
+      const c = Math.cos(ang)
+      const s = Math.sin(ang)
+      console.log(
+        c, s, 0, 0,
+        -s, c, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1,
+      );
+    }
+
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>纹理对象</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <script id="vertexShader" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    attribute vec2 a_Pin;
+    varying vec2 v_Pin;
+    void main(){
+      gl_Position = a_Position;
+      v_Pin=a_Pin;
+    }
+  </script>
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform sampler2D u_Sampler;
+    varying vec2 v_Pin;
+    void main(){
+      gl_FragColor=texture2D(u_Sampler,v_Pin);
+    }
+  </script>
+  <script type="module">
+    import { initShaders } from '../jsm/Utils.js';
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const gl = canvas.getContext('webgl');
+
+    const vsSource = document.getElementById('vertexShader').innerText;
+    const fsSource = document.getElementById('fragmentShader').innerText;
+    initShaders(gl, vsSource, fsSource);
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+
+
+    //数据源
+    const maxV = 2
+    const maxU = 2
+    const source = new Float32Array([
+      -0.5, 0.5, 0, maxV,
+      -0.5, -0.5, 0, 0.0,
+      0.5, 0.5, maxU, maxV,
+      0.5, -0.5, maxU, 0.0,
+    ]);
+    const FSIZE = source.BYTES_PER_ELEMENT;
+    //元素字节数
+    const elementBytes = source.BYTES_PER_ELEMENT
+    //系列尺寸
+    const posSize = 2
+    const pinSize = 2
+    //类目尺寸
+    const categorySize = posSize + pinSize
+    //类目字节数
+    const categoryBytes = categorySize * elementBytes
+    //系列字节索引位置
+    const posByteIndex = 0
+    const pinByteIndex = posSize * elementBytes
+    //顶点总数
+    const sourceSize = source.length / categorySize
+
+
+    const sourceBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, sourceBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, source, gl.STATIC_DRAW);
+
+    const a_Position = gl.getAttribLocation(gl.program, 'a_Position');
+    gl.vertexAttribPointer(
+      a_Position,
+      posSize,
+      gl.FLOAT,
+      false,
+      categoryBytes,
+      posByteIndex
+    );
+    gl.enableVertexAttribArray(a_Position);
+
+    const a_Pin = gl.getAttribLocation(gl.program, 'a_Pin');
+    gl.vertexAttribPointer(
+      a_Pin,
+      pinSize,
+      gl.FLOAT,
+      false,
+      categoryBytes,
+      pinByteIndex
+    );
+    gl.enableVertexAttribArray(a_Pin);
+
+    /* 图像预处理 */
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1)
+
+    /* 准备三个角色 */
+    gl.activeTexture(gl.TEXTURE0)
+    const texture = gl.createTexture()
+    gl.bindTexture(gl.TEXTURE_2D, texture)
+    const image = new Image()
+    // image.src = './images/erha3.jpg'
+    image.src = './images/erha.jpg'
+    image.onload = function () {
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.RGB,
+        gl.RGB,
+        gl.UNSIGNED_BYTE,
+        image
+      )
+
+      //创建分子贴图
+      // gl.generateMipmap(gl.TEXTURE_2D)
+
+      gl.texParameteri(
+        gl.TEXTURE_2D,
+        gl.TEXTURE_MAG_FILTER,
+        gl.LINEAR
+      )
+
+      gl.texParameteri(
+        gl.TEXTURE_2D,
+        gl.TEXTURE_MIN_FILTER,
+        gl.LINEAR
+      )
+      /* gl.texParameteri(
+        gl.TEXTURE_2D,
+        gl.TEXTURE_MIN_FILTER,
+        gl.NEAREST_MIPMAP_LINEAR
+      ) */
+
+
+
+      const u_Sampler = gl.getUniformLocation(gl.program, 'u_Sampler')
+      gl.uniform1i(u_Sampler, 0)
+
+      render()
+    }
+
+
+
+
+    //渲染
+    function render() {
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, sourceSize);
+    }
+
+
+  </script>
+</body>
+
+</html>

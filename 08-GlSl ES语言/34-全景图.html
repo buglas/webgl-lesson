@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>全景图</title>
+  <link rel="icon" href="https://img.kaikeba.com/kkb_portal_icon.ico">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+
+    #canvas {
+      background-color: antiquewhite;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <!-- 顶点着色器 -->
+  <script id="vertexShader" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    attribute vec2 a_Pin;
+    varying vec2 v_Pin;
+    void main(){
+      gl_Position=a_Position;
+      v_Pin=a_Pin;
+    }
+  </script>
+  <!-- 片元着色器 -->
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform vec2 u_CanvasSize;
+    uniform sampler2D u_Sampler;
+    varying vec2 v_Pin;
+    vec2 center=u_CanvasSize/2.0;
+    float diagLen=length(center);
+    float pi2=radians(360.0);
+    
+    float getAngle(vec2 v){
+      float ang=atan(v.y,v.x);
+      if(ang<0.0){
+          ang+=pi2;
+      }
+      return ang;
+    }
+
+    void main(){
+      vec2 p=gl_FragCoord.xy-center;
+      float ang=getAngle(p);
+      float x=ang/pi2;
+      float len=length(p);
+      float y=len/diagLen;
+      vec4 color=texture2D(u_Sampler,vec2(x,y));
+      if(p.x>0.0&&abs(p.y)<1.5){
+        color=texture2D(u_Sampler,vec2(0,y));
+      }
+      gl_FragColor=color;
+    }
+  </script>
+  <script type="module">
+    import { initShaders, parseColorStops } from "../jsm/Utils.js";
+    import Poly from './jsm/Poly.js'
+
+    const canvas = document.querySelector("#canvas");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // 获取着色器文本
+    const vsSource = document.querySelector("#vertexShader").innerText;
+    const fsSource = document.querySelector("#fragmentShader").innerText;
+
+    //三维画笔
+    const gl = canvas.getContext("webgl");
+
+    //初始化着色器
+    initShaders(gl, vsSource, fsSource);
+
+    //声明颜色 rgba
+    gl.clearColor(0, 0, 0, 1);
+
+    const source = new Float32Array([
+      -1, 1, 0, 1,
+      -1, -1, 0, 0,
+      1, 1, 1, 1,
+      1, -1, 1, 0
+    ]);
+
+    const rect = new Poly({
+      gl,
+      source,
+      type: 'TRIANGLE_STRIP',
+      attributes: {
+        a_Position: {
+          size: 2,
+          index: 0
+        },
+        a_Pin: {
+          size: 2,
+          index: 2
+        },
+      },
+      uniforms: {
+        u_CanvasSize: {
+          type: 'uniform2fv',
+          value: [canvas.width, canvas.height]
+        }
+      }
+    })
+
+    const image = new Image()
+    image.src = './images/room.jpg'
+    image.onload = function () {
+      rect.maps = {
+        u_Sampler: { image },
+      }
+      rect.updateMaps()
+      render()
+    }
+
+    //渲染
+    function render() {
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      rect.draw()
+    }
+
+  </script>
+</body>
+
+</html>

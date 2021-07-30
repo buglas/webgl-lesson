@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>限定词</title>
+  <link rel="icon" href="https://img.kaikeba.com/kkb_portal_icon.ico">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+
+    #canvas {
+      background-color: antiquewhite;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <!-- 顶点着色器 -->
+  <script id="vertexShader" type="x-shader/x-vertex">
+    void main(){
+      //点位
+      gl_Position=vec4(0,0,0,1);
+      //尺寸
+      gl_PointSize=512.0;
+    }
+  </script>
+  <!-- 片元着色器 -->
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    precision mediump float;
+    /*
+    void setLum(in vec3 color){
+      color.y=255.0;
+    }
+    */
+    /*
+    void setLum(out vec3 color){
+      color.y=255.0;
+    }
+    */
+    void setLum(const in vec3 color){
+      //color.y=255.0;
+      float y=color.y;
+    }
+    void main(){
+      vec3 color=vec3(255,0,0);
+      setLum(color);
+      vec4 v=vec4(color,255);
+      //vec4 v=vec4(vec3(lum),255);
+      gl_FragColor=v/255.0;
+    }
+    
+  </script>
+  <script type="module">
+    import { initShaders } from "../jsm/Utils.js";
+
+    const canvas = document.querySelector("#canvas");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // 获取着色器文本
+    const vsSource = document.querySelector("#vertexShader").innerText;
+    const fsSource = document.querySelector("#fragmentShader").innerText;
+
+    //三维画笔
+    const gl = canvas.getContext("webgl");
+
+    //初始化着色器
+    //功能：解析着色器文本，整合到程序对象里，关联webgl上下文对象，实现两种语言的相互通信
+    initShaders(gl, vsSource, fsSource);
+
+    //声明颜色 rgba
+    gl.clearColor(0, 0, 0, 1);
+    //刷底色
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    //绘制顶点
+    gl.drawArrays(gl.POINTS, 0, 1);
+
+    //像素容器
+    const pixel = new Uint8Array(4)
+    //抓取像素
+    gl.readPixels(
+      canvas.width / 2, canvas.height / 2,
+      1, 1,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      pixel
+    )
+
+    console.log(pixel);
+  </script>
+</body>
+
+</html>

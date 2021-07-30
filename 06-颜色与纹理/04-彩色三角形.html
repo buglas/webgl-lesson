@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>顶点索引</title>
+  <link rel="icon" href="https://img.kaikeba.com/kkb_portal_icon.ico">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+
+    #canvas {
+      background-color: antiquewhite;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <!-- 顶点着色器 -->
+  <script id="vertexShader" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    attribute vec4 a_Color;
+    varying vec4 v_Color;
+    void main(){
+        //点位
+        gl_Position=a_Position;
+        //尺寸
+        gl_PointSize=50.0;
+        v_Color=a_Color;
+    }
+  </script>
+  <!-- 片元着色器 -->
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    precision mediump float;
+    varying vec4 v_Color;
+    void main(){
+        gl_FragColor=v_Color;
+    }
+  </script>
+  <script type="module">
+    import { initShaders } from "../jsm/Utils.js";
+
+    const canvas = document.querySelector("#canvas");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // 获取着色器文本
+    const vsSource = document.querySelector("#vertexShader").innerText;
+    const fsSource = document.querySelector("#fragmentShader").innerText;
+
+    //三维画笔
+    const gl = canvas.getContext("webgl");
+
+    //初始化着色器
+    initShaders(gl, vsSource, fsSource);
+    //声明颜色 rgba
+    gl.clearColor(0, 0, 0, 1);
+
+    //数据源
+    const source = new Float32Array([
+      0, 0.2, 0, 0, 0, 1, 1,
+      -0.2, -0.1, 0, 0, 1, 0, 1,
+      0.2, -0.1, 0, 1, 0, 0, 1,
+    ]);
+    //元素字节数
+    const elementBytes = source.BYTES_PER_ELEMENT
+    //系列尺寸
+    const verticeSize = 3
+    const colorSize = 4
+    //类目尺寸
+    const categorySize = verticeSize + colorSize
+    //类目字节数
+    const categoryBytes = categorySize * elementBytes
+    //系列字节索引位置
+    const verticeByteIndex = 0
+    const colorByteIndex = verticeSize * elementBytes
+    //顶点总数
+    const sourceSize = source.length / categorySize
+
+
+    //缓冲对象
+    const sourceBuffer = gl.createBuffer();
+    //绑定缓冲对象
+    gl.bindBuffer(gl.ARRAY_BUFFER, sourceBuffer);
+    //写入数据
+    gl.bufferData(gl.ARRAY_BUFFER, source, gl.STATIC_DRAW)
+
+    //获取attribute 变量
+    const a_Position = gl.getAttribLocation(gl.program, 'a_Position')
+    //修改attribute 变量
+    gl.vertexAttribPointer(
+      a_Position,
+      verticeSize,
+      gl.FLOAT,
+      false,
+      categoryBytes,
+      verticeByteIndex
+    )
+    //赋能-批处理
+    gl.enableVertexAttribArray(a_Position)
+
+    //获取attribute 变量
+    const a_Color = gl.getAttribLocation(gl.program, 'a_Color')
+    //修改attribute 变量
+    gl.vertexAttribPointer(
+      a_Color,
+      colorSize,
+      gl.FLOAT,
+      false,
+      categoryBytes,
+      colorByteIndex
+    )
+    //赋能-批处理
+    gl.enableVertexAttribArray(a_Color)
+
+
+
+    //刷底色
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    //绘制顶点
+    gl.drawArrays(gl.TRIANGLES, 0, sourceSize);
+  </script>
+</body>
+
+</html>

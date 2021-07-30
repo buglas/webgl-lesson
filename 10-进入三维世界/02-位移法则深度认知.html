@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>位移</title>
+  <link rel="icon" href="https://img.kaikeba.com/kkb_portal_icon.ico">
+</head>
+
+<body>
+  <script type="module">
+    import { Group, Matrix4, Object3D, Scene, Vector3, } from 'https://unpkg.com/three/build/three.module.js';
+
+    //世界坐标系-宇宙
+    const m1 = new Matrix4()
+    m1.elements = [
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
+      0, 0, 0, 1,
+    ]
+
+    //本地坐标系-银河系
+    const m2 = new Matrix4()
+    m2.elements = [
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
+      1, 2, 3, 1,
+    ]
+
+    //本地坐标系-太阳系
+    const m3 = new Matrix4()
+    m3.elements = [
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
+      4, 5, 6, 1,
+    ]
+
+    //地球在太阳系内的本地坐标位
+    const P3 = new Vector3(7, 8, 9)
+
+    //创造宇宙
+    const universe = new Scene()
+    universe.applyMatrix4(m1)
+
+    //创造银河系
+    const galaxy = new Group()
+    galaxy.applyMatrix4(m2)
+
+    //创造太阳系
+    const solar = new Group()
+    solar.applyMatrix4(m3)
+
+    //创造地球
+    const earth = new Object3D()
+    earth.position.copy(P3)
+
+    //太阳系包含地球
+    solar.add(earth)
+
+    //银河系包含太阳
+    galaxy.add(solar)
+
+    //宇宙包含银河系
+    universe.add(galaxy)
+
+    //求太阳在宇宙中的世界位
+    const P1 = new Vector3()
+    earth.getWorldPosition(P1)
+    console.log(P1);
+
+  </script>
+</body>
+
+</html>

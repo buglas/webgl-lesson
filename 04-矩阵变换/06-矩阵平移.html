@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>矩阵平移</title>
+  <link rel="icon" href="https://img.kaikeba.com/kkb_portal_icon.ico">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <script id="vertexShader" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    float tx=0.4;
+    float ty=0.3;
+    float tz=0.2;
+    //列主序
+    mat4 m4=mat4(
+      1.0, 0.0, 0.0,0.0,
+      0.0, 1.0, 0.0,0.0,
+      0.0, 0.0, 1.0,0.0,
+      tx,  ty,  tz ,1.0
+    );
+    void main(){
+      gl_Position = m4*a_Position;
+    }
+  </script>
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    void main(){
+      gl_FragColor=vec4(1.0,1.0,0.0,1.0);
+    }
+  </script>
+  <script type="module">
+    import { initShaders } from '../jsm/Utils.js';
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const gl = canvas.getContext('webgl');
+
+    const vsSource = document.getElementById('vertexShader').innerText;
+    const fsSource = document.getElementById('fragmentShader').innerText;
+    initShaders(gl, vsSource, fsSource);
+
+    const vertices = new Float32Array([
+      0.0, 0.1,
+      -0.1, -0.1,
+      0.1, -0.1
+    ])
+
+    const vertexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+    const a_Position = gl.getAttribLocation(gl.program, 'a_Position');
+    gl.vertexAttribPointer(a_Position, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(a_Position);
+
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  </script>
+</body>
+
+</html>

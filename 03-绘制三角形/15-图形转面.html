@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>图形转面</title>
+  <link rel="icon" href="https://img.kaikeba.com/kkb_portal_icon.ico">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+
+    #canvas {
+      background-color: antiquewhite;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <!-- 顶点着色器 -->
+  <script id="vertexShader" type="x-shader/x-vertex">
+      attribute vec4 a_Position;
+      void main(){
+          gl_Position=a_Position;
+          gl_PointSize=10.0;
+      }
+    </script>
+  <!-- 片元着色器 -->
+  <script id="fragmentShader" type="x-shader/x-fragment">
+      void main(){
+          gl_FragColor=vec4(1,1,0,1);
+      }
+    </script>
+  <script type="module">
+    import { initShaders, ScaleLinear } from "../jsm/Utils.js";
+    import Poly from "../jsm/Poly.js";
+    import ShapeGeo from "../jsm/ShapeGeo.js";
+
+    const canvas = document.querySelector("#canvas");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // 获取着色器文本
+    const vsSource = document.querySelector("#vertexShader").innerText;
+    const fsSource = document.querySelector("#fragmentShader").innerText;
+
+    //三维画笔
+    const gl = canvas.getContext("webgl");
+
+    //初始化着色器
+    initShaders(gl, vsSource, fsSource);
+
+    //声明颜色 rgba
+    gl.clearColor(0, 0, 0, 1);
+    //刷底色
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    //路径G-逆时针
+    const pathData = [
+      0, 0,
+      0, 600,
+      600, 600,
+      600, 200,
+      200, 200,
+      200, 400,
+      300, 400,
+      300, 300,
+      500, 300,
+      500, 500,
+      100, 500,
+      100, 100,
+      600, 100,
+      600, 0,
+    ];
+
+    //宽高比
+    const ratio = canvas.width / canvas.height;
+    //正方形高度
+    const rectH = 1.0;
+    //正方形宽度
+    const rectW = rectH / ratio;
+    //正方形宽高的一半
+    const [halfRectW, halfRectH] = [rectW / 2, rectH / 2];
+    //两个极点
+    const minX = -halfRectW;
+    const minY = -halfRectH;
+    const maxX = halfRectW;
+    const maxY = halfRectH;
+    //正方形
+    const rect = new Poly({
+      gl,
+      vertices: [
+        minX, maxY,
+        minX, minY,
+        maxX, minY,
+        maxX, maxY,
+      ],
+    });
+    rect.draw();
+
+
+    //建立比例尺
+    const scaleX = ScaleLinear(
+      0, minX,
+      600, maxX
+    );
+    const scaleY = ScaleLinear(
+      0, maxY,
+      600, minY
+    );
+
+    //将路径G中的像素数据解析为webgl数据
+    const glData = [];
+    for (let i = 0; i < pathData.length; i += 2) {
+      glData.push(scaleX(pathData[i]), scaleY(pathData[i + 1]));
+    }
+    const path = new Poly({
+      gl,
+      vertices: glData,
+      types: ["POINTS", "LINE_LOOP"],
+    });
+    path.draw();
+
+    const shapeGeo = new ShapeGeo(glData)
+    const face = new Poly({
+      gl,
+      vertices: shapeGeo.vertices,
+      types: ["TRIANGLES"],
+    });
+    face.draw();
+
+
+  </script>
+</body>
+
+</html>

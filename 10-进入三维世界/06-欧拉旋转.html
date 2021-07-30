@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>旋转</title>
+  <link rel="icon" href="https://img.kaikeba.com/kkb_portal_icon.ico">
+</head>
+
+<body>
+  <script type="module">
+    import { Group, Matrix4, Object3D, Scene, Vector3, Euler } from 'https://unpkg.com/three/build/three.module.js';
+
+    const [angX, angY, angZ] = [1, 2, 3]
+    const P1 = new Vector3(1, 1, 1)
+
+    //用矩阵乘法实现顶点绕单轴多次逆时针旋转
+    {
+      const mx = new Matrix4().makeRotationX(angX)
+      const my = new Matrix4().makeRotationY(angY)
+      const mz = new Matrix4().makeRotationZ(angZ)
+
+      //P2=mx*my*mz*P1
+      const P2 = P1.clone()
+      P2.applyMatrix4(
+        mx.multiply(my).multiply(mz)
+      )
+      console.log(P2);
+    }
+
+    //用欧拉实现顶点绕单轴多次逆时针旋转
+    {
+      const euler = new Euler(angX, angY, angZ)
+      const m = new Matrix4()
+      m.makeRotationFromEuler(euler)
+      const P2 = P1.clone().applyMatrix4(m)
+      console.log(P2);
+    }
+
+  </script>
+</body>
+
+</html>

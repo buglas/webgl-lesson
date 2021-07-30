@@ -1,0 +1,23 @@
+{
+  "name": "09-element3-webgl",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "dependencies": {
+    "element3-core": "0.0.7",
+    "vue": "^3.0.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^1.2.2",
+    "@vue/compiler-sfc": "^3.0.5",
+    "rollup-plugin-element3-webgl": "0.0.5",
+    "typescript": "^4.1.3",
+    "vite": "^2.3.0",
+    "vue-tsc": "^0.0.24"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}

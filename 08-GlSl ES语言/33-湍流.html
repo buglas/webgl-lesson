@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>放射</title>
+  <link rel="icon" href="https://img.kaikeba.com/kkb_portal_icon.ico">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+
+    #canvas {
+      background-color: antiquewhite;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <!-- 顶点着色器 -->
+  <script id="vertexShader" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    void main(){
+      gl_Position=a_Position;
+    }
+  </script>
+  <!-- 片元着色器 -->
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform vec2 u_CanvasSize;
+    uniform float u_Stamp;
+
+    vec2 center=u_CanvasSize/2.0;
+    float pi2=radians(360.0);
+
+    float omega=64.0;
+    float a=0.5;
+
+    float angOffset1=u_Stamp*0.0004;
+    float sinAng1=sin(angOffset1);
+
+    float angOffset2=u_Stamp*0.0002;
+    float cosAng2=cos(angOffset2);
+    float sinAng2=sin(angOffset2);
+    mat2 modelMatrix2=mat2(
+      cosAng2,sinAng1,
+      -sinAng2,cosAng2
+    );
+
+    float getBright(vec2 pole){
+      pole=center+modelMatrix2*(pole-center);
+      vec2 p=gl_FragCoord.xy-pole;
+      float ang=atan(p.y,p.x);
+      return a*sin(omega*ang)+0.5;
+    }
+
+    void main(){
+      vec2 min=u_CanvasSize*0.25;
+      vec2 max=u_CanvasSize*0.75;
+      float bright1 = getBright(min);
+      float bright2 = getBright(max);
+      float bright3 = getBright(vec2(min.x,max.y));
+      float bright4 = getBright(vec2(max.x,min.y));
+      float f=0.0;
+      float sum=bright1+bright2+bright3+bright4;
+      if(sum<2.0){
+        f=1.0;
+      }
+      gl_FragColor = vec4(f, f, f, 1);
+    }
+  </script>
+  <script type="module">
+    import { initShaders, parseColorStops } from "../jsm/Utils.js";
+    import Poly from './jsm/Poly.js'
+
+    const canvas = document.querySelector("#canvas");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // 获取着色器文本
+    const vsSource = document.querySelector("#vertexShader").innerText;
+    const fsSource = document.querySelector("#fragmentShader").innerText;
+
+    //三维画笔
+    const gl = canvas.getContext("webgl");
+
+    //初始化着色器
+    initShaders(gl, vsSource, fsSource);
+
+    //声明颜色 rgba
+    gl.clearColor(0, 0, 0, 1);
+
+    const source = new Float32Array([
+      -1, 1,
+      -1, -1,
+      1, 1,
+      1, -1
+    ]);
+
+
+    const rect = new Poly({
+      gl,
+      source,
+      type: 'TRIANGLE_STRIP',
+      attributes: {
+        a_Position: {
+          size: 2,
+          index: 0
+        }
+      },
+      uniforms: {
+        u_CanvasSize: {
+          type: 'uniform2fv',
+          value: [canvas.width, canvas.height]
+        },
+        u_Stamp: {
+          type: 'uniform1f',
+          value: 0
+        }
+      }
+    })
+
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    rect.draw()
+
+    !(function ani(stamp) {
+      rect.uniforms.u_Stamp.value = stamp;
+      rect.updateUniform();
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      rect.draw()
+      requestAnimationFrame(ani)
+    })()
+
+  </script>
+</body>
+
+</html>

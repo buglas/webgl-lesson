@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>02-多姿多彩的画布</title>
+  <link rel="icon" href="https://img.kaikeba.com/kkb_portal_icon.ico">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+
+    #canvas {
+      background-color: antiquewhite;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <script type="module">
+    import { Color } from "https://unpkg.com/three/build/three.module.js";
+
+    const canvas = document.querySelector("#canvas");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    //二维画笔
+    // const gl=canvas.getContext('2d');
+    //三维画笔
+    const gl = canvas.getContext("webgl");
+    //声明颜色 rgba
+    gl.clearColor(1, 1, 0, 1);
+    //刷底色
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    // 建立Color 对象
+    const color = new Color("rgba(255,0,0,1)");
+    //声明颜色 rgba
+    gl.clearColor(color.r, color.g, color.b, 1);
+    //刷底色
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    !(function ani() {
+      color.offsetHSL(0.005, 0, 0);
+      //声明颜色 rgba
+      gl.clearColor(color.r, color.g, color.b, 1);
+      //刷底色
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      requestAnimationFrame(ani);
+    })();
+  </script>
+</body>
+
+</html>

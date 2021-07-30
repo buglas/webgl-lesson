@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>旋转</title>
+  <link rel="icon" href="https://img.kaikeba.com/kkb_portal_icon.ico">
+</head>
+
+<body>
+  <script type="module">
+    import { Group, Matrix4, Object3D, Scene, Vector3, } from 'https://unpkg.com/three/build/three.module.js';
+
+    //让银河系的本地坐标系[O2;i2,j2,k2]绕j2轴逆时针旋转20°
+    const ang2 = -20 * Math.PI / 180
+    const c2 = Math.cos(ang2)
+    const s2 = Math.sin(ang2)
+
+    //让太阳系的本地坐标系[O3;i3,j3,k3]绕k3轴逆时针旋转30°
+    const ang3 = 30 * Math.PI / 180
+    const c3 = Math.cos(ang3)
+    const s3 = Math.sin(ang3)
+
+    const m = new Matrix4()
+    m.elements = [
+      c2 * c3, s3, s2 * c3, 0,
+      -c2 * s3, c3, -s2 * s3, 0,
+      -s2, 0, c2, 0,
+      c2 * 4 - s2 * 6 + 1, 5 + 2, s2 * 4 + c2 * 6 + 3, 1
+    ]
+
+    const P3 = new Vector3(7, 8, 9)
+    const P1 = P3.applyMatrix4(m)
+    console.log(P1);
+
+  </script>
+</body>
+
+</html>
