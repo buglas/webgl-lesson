@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>正交相机缩放轨道</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+
+    #canvas {
+      background-color: antiquewhite;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <!-- 顶点着色器 -->
+  <script id="vertexShader" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    uniform mat4 u_PvMatrix;
+    uniform mat4 u_ModelMatrix;
+    void main(){
+    	gl_Position = u_PvMatrix*u_ModelMatrix*a_Position;
+    }
+  </script>
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform vec4 u_Color;
+    void main(){
+    	gl_FragColor=u_Color;
+    }
+  </script>
+  <script type="module">
+    import { initShaders } from '../jsm/Utils.js';
+    import {
+      Matrix4, Vector2, Vector3, Quaternion, Object3D,
+      OrthographicCamera, PerspectiveCamera
+    } from 'https://unpkg.com/three/build/three.module.js';
+    import Poly from './jsm/Poly.js'
+
+    const canvas = document.getElementById('canvas');
+    const [viewW, viewH] = [window.innerWidth, window.innerHeight]
+    canvas.width = viewW;
+    canvas.height = viewH;
+    const gl = canvas.getContext('webgl');
+
+    const vsSource = document.getElementById('vertexShader').innerText;
+    const fsSource = document.getElementById('fragmentShader').innerText;
+    initShaders(gl, vsSource, fsSource);
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+
+    const halfH = 2
+    const ratio = canvas.width / canvas.height
+    const halfW = halfH * ratio
+    const [left, right, top, bottom, near, far] = [
+      -halfW, halfW, halfH, -halfH, 1, 8
+    ]
+    const eye = new Vector3(1, 1, 2)
+    const target = new Vector3(0, 0, -3)
+    const up = new Vector3(0, 1, 0)
+
+    const camera = new OrthographicCamera(
+      left, right, top, bottom, near, far
+    )
+    camera.position.copy(eye)
+    camera.lookAt(target)
+    camera.updateMatrixWorld()
+    const pvMatrix = new Matrix4()
+    pvMatrix.multiplyMatrices(
+      camera.projectionMatrix,
+      camera.matrixWorldInverse,
+    )
+
+
+    const triangle1 = crtTriangle(
+      [1, 0, 0, 1],
+      [
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        -0.5, 0, -3, 1,
+      ]
+    )
+    const triangle2 = crtTriangle(
+      [1, 0, 0, 1],
+      new Matrix4().setPosition(0.5, 0, -3).elements
+    )
+
+    const triangle3 = crtTriangle(
+      [1, 1, 0, 1],
+      new Matrix4().setPosition(-0.5, 0, -2).elements
+    )
+
+    const triangle4 = crtTriangle(
+      [1, 1, 0, 1],
+      new Matrix4().setPosition(0.5, 0, -2).elements
+    )
+
+
+    /* 平移轨道 */
+    //声明基础数据
+    const mouseButtons = new Map([
+      [2, 'pan']
+    ])
+    let state = 'none'
+    const [dragStart, dragEnd] = [
+      new Vector2(),
+      new Vector2(),
+    ]
+    const panOffset = new Vector3()
+    const screenSpacePanning = true
+
+    /* 缩放轨道 */
+    //滚轮在每次滚动时的缩放系数
+    const zoomScale = 0.95
+
+    //在canvas上绑定鼠标事件
+    canvas.addEventListener('contextmenu', (event) => {
+      event.preventDefault()
+    })
+    canvas.addEventListener('pointerdown', ({ clientX, clientY, button }) => {
+      dragStart.set(clientX, clientY)
+      state = mouseButtons.get(button)
+    })
+    canvas.addEventListener('pointermove', (event) => {
+      switch (state) {
+        case 'pan':
+          handleMouseMovePan(event)
+          break
+      }
+    })
+    canvas.addEventListener('pointerup', (event) => {
+      state = 'none'
+    })
+
+    //滚轮事件
+    canvas.addEventListener('wheel', handleMouseWheel)
+    function handleMouseWheel({ deltaY }) {
+      console.log('deltaY', deltaY);
+      if (deltaY < 0) {
+        dolly(1 / zoomScale)
+      } else {
+        dolly(zoomScale)
+      }
+      update()
+    }
+
+    function dolly(dollyScale) {
+      camera.zoom *= dollyScale
+      camera.updateProjectionMatrix()
+    }
+
+
+    function handleMouseMovePan({ clientX, clientY }) {
+      dragEnd.set(clientX, clientY)
+      pan(dragEnd.clone().sub(dragStart))
+      dragStart.copy(dragEnd)
+    }
+
+    function pan(delta) {
+      const cameraW = camera.right - camera.left
+      const cameraH = camera.top - camera.bottom
+      const ratioX = delta.x / canvas.clientWidth
+      const ratioY = delta.y / canvas.clientHeight
+      const distanceLeft = ratioX * cameraW
+      const distanceUp = ratioY * cameraH
+      const mx = new Vector3().setFromMatrixColumn(camera.matrix, 0)
+      const vx = mx.clone().multiplyScalar(-distanceLeft)
+      const vy = new Vector3()
+      if (screenSpacePanning) {
+        vy.setFromMatrixColumn(camera.matrix, 1)
+      } else {
+        vy.crossVectors(camera.up, mx)
+      }
+      vy.multiplyScalar(distanceUp)
+      panOffset.copy(vx.add(vy))
+      update()
+    }
+
+    function update() {
+      target.add(panOffset)
+      camera.position.add(panOffset)
+      camera.lookAt(target)
+      camera.updateMatrixWorld(true)
+      pvMatrix.multiplyMatrices(
+        camera.projectionMatrix,
+        camera.matrixWorldInverse,
+      )
+      render()
+    }
+
+    render()
+
+    function render() {
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      triangle1.init()
+      triangle1.draw()
+      triangle2.init()
+      triangle2.draw()
+      triangle3.init()
+      triangle3.draw()
+      triangle4.init()
+      triangle4.draw()
+    }
+
+    function crtTriangle(color, modelMatrix) {
+      return new Poly({
+        gl,
+        source: [
+          0, 0.3, 0,
+          -0.3, -0.3, 0,
+          0.3, -0.3, 0,
+        ],
+        type: 'TRIANGLES',
+        attributes: {
+          a_Position: {
+            size: 3,
+            index: 0
+          },
+        },
+        uniforms: {
+          u_Color: {
+            type: 'uniform4fv',
+            value: color
+          },
+          u_PvMatrix: {
+            type: 'uniformMatrix4fv',
+            value: pvMatrix.elements
+          },
+          u_ModelMatrix: {
+            type: 'uniformMatrix4fv',
+            value: modelMatrix
+          }
+        }
+      })
+    }
+  </script>
+</body>
+
+</html>
