@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>打印多个向量</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+
+    #canvas {
+      background-color: antiquewhite;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <!-- 顶点着色器 -->
+  <script id="vertexShader" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    void main(){
+      gl_Position=a_Position;
+    }
+  </script>
+  <!-- 片元着色器 -->
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform vec2 u_CanvasSize;
+    float halfW=u_CanvasSize.x/2.0;
+    float halfH=u_CanvasSize.y/2.0;
+    void main(){
+      mat4 m=mat4(
+        255,0,0,255,
+        255,255,0,255,
+        0,255,0,255,
+        0,0,255,255
+      );
+      bool xb= gl_FragCoord.x<halfW;
+      bool yb= gl_FragCoord.y<halfH;
+      if(yb){
+        if(xb){
+          gl_FragColor=m[0]/255.0;
+        }else{
+          gl_FragColor=m[1]/255.0;
+        }
+      }else{
+        if(xb){
+          gl_FragColor=m[2]/255.0;
+        }else{
+          gl_FragColor=m[3]/255.0;
+        }
+      }
+    }
+  </script>
+  <script type="module">
+    import { initShaders } from "../jsm/Utils.js";
+    import Poly from './jsm/Poly.js'
+
+    console.log(window.devicePixelRatio);
+
+    const canvas = document.querySelector("#canvas");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // 获取着色器文本
+    const vsSource = document.querySelector("#vertexShader").innerText;
+    const fsSource = document.querySelector("#fragmentShader").innerText;
+
+    //三维画笔
+    const gl = canvas.getContext("webgl");
+
+    //初始化着色器
+    initShaders(gl, vsSource, fsSource);
+
+    //声明颜色 rgba
+    gl.clearColor(0, 0, 0, 1);
+
+    const source = new Float32Array([
+      -1, 1,
+      -1, -1,
+      1, 1,
+      1, -1
+    ]);
+
+    const rect = new Poly({
+      gl,
+      source,
+      type: 'TRIANGLE_STRIP',
+      attributes: {
+        a_Position: {
+          size: 2,
+          index: 0
+        }
+      },
+      uniforms: {
+        u_CanvasSize: {
+          type: 'uniform2fv',
+          value: [canvas.width, canvas.height]
+        }
+      }
+    })
+
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    rect.draw()
+
+    const [w, h] = [2, 2]
+    for (let y = 0; y < 2; y++) {
+      for (let x = 0; x < 2; x++) {
+        const px = canvas.width * (x + 0.5) / w
+        const py = canvas.height * (y + 0.5) / h
+        logPixel(px, py)
+      }
+    }
+    function logPixel(x, y) {
+      const pixel = new Uint8Array(4)
+      gl.readPixels(
+        x, y,
+        1, 1,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        pixel
+      )
+      console.log(pixel)
+    }
+
+  </script>
+</body>
+
+</html>

@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <title>正交相机位移轨道</title>
+  <title>正交相机轨迹球</title>
   <style>
     body {
       margin: 0;
@@ -38,7 +38,8 @@
     import { initShaders } from '../jsm/Utils.js';
     import {
       Matrix4, Vector2, Vector3, Quaternion, Object3D,
-      OrthographicCamera, PerspectiveCamera
+      OrthographicCamera, PerspectiveCamera,
+      Spherical
     } from 'https://unpkg.com/three/build/three.module.js';
     import Poly from './jsm/Poly.js'
 
@@ -102,42 +103,78 @@
 
 
     /* 声明基础数据 */
+    //鼠标事件集合
     const mouseButtons = new Map([
-      [2, 'pan']
+      [0, 'rotate'],
+      [2, 'pan'],
     ])
+    //轨道状态
     let state = 'none'
-
-    /* 平移轨道 */
+    //2PI
+    const pi2 = Math.PI * 2
+    //鼠标拖拽的起始位和结束位，无论是左键按下还是右键按下
     const [dragStart, dragEnd] = [
       new Vector2(),
       new Vector2(),
     ]
+
+    /* 平移轨道 */
+    //平移量
     const panOffset = new Vector3()
+    //是否沿相机y轴平移相机
     const screenSpacePanning = true
 
-    //在canvas上绑定鼠标事件
+    /* 缩放轨道 */
+    //滚轮在每次滚动时的缩放系数
+    const zoomScale = 0.95
+
+    /* 旋转轨道 */
+    const quaternion = new Quaternion()
+
+
+    /* 取消右击菜单的显示 */
     canvas.addEventListener('contextmenu', (event) => {
       event.preventDefault()
     })
+
+    /* 指针按下时，设置拖拽起始位，获取轨道控制器状态。 */
     canvas.addEventListener('pointerdown', ({ clientX, clientY, button }) => {
       dragStart.set(clientX, clientY)
       state = mouseButtons.get(button)
     })
-    canvas.addEventListener('pointermove', (event) => {
+
+    /* 指针移动时，若控制器处于平移状态，平移相机；若控制器处于旋转状态，旋转相机。 */
+    canvas.addEventListener('pointermove', ({ clientX, clientY }) => {
+      dragEnd.set(clientX, clientY)
       switch (state) {
         case 'pan':
-          handleMouseMovePan(event)
+          pan(dragEnd.clone().sub(dragStart))
+          break
+        case 'rotate':
+          rotate(dragEnd.clone().sub(dragStart))
           break
       }
+      dragStart.copy(dragEnd)
     })
     canvas.addEventListener('pointerup', (event) => {
       state = 'none'
     })
 
-    function handleMouseMovePan({ clientX, clientY }) {
-      dragEnd.set(clientX, clientY)
-      pan(dragEnd.clone().sub(dragStart))
-      dragStart.copy(dragEnd)
+    //滚轮事件
+    canvas.addEventListener('wheel', handleMouseWheel)
+    function handleMouseWheel({ deltaY }) {
+      console.log('deltaY', deltaY);
+      if (deltaY < 0) {
+        dolly(1 / zoomScale)
+      } else {
+        dolly(zoomScale)
+      }
+      update()
+    }
+
+    function dolly(dollyScale) {
+      camera.zoom *= dollyScale
+      camera.updateProjectionMatrix()
     }
 
     //平移方法
@@ -163,16 +200,81 @@
       update()
     }
 
+    // 旋转方法
+    function rotate({ x, y }) {
+      const { right, left, top, bottom, matrix, position } = camera
+      const { clientWidth, clientHeight } = canvas
+
+      // 相机宽高
+      const cameraW = right - left
+      const cameraH = top - bottom
+
+      // 鼠标位移距离在画布中的占比
+      const ratioX = x / clientWidth
+      const ratioY = -y / clientHeight
+
+      //基于高度的x位置比-用于旋转量的计算
+      const ratioBaseHeight = x / clientHeight
+      //位移量  
+      const ratioLen = new Vector2(ratioBaseHeight, ratioY).length()
+      //旋转量
+      const angle = ratioLen * pi2
+
+      // 在相机世界中的位移距离
+      const distanceLeft = ratioX * cameraW
+      const distanceUp = ratioY * cameraH
+
+      // 相机本地坐标系的x,y轴
+      const mx = new Vector3().setFromMatrixColumn(camera.matrix, 0)
+      const my = new Vector3().setFromMatrixColumn(camera.matrix, 1)
+
+      // 将鼠标在相机世界的x,y轴向的位移量转换为世界坐标位
+      const vx = mx.clone().multiplyScalar(distanceLeft)
+      const vy = my.clone().multiplyScalar(distanceUp)
+
+      //鼠标在世界坐标系中的位移方向-x轴
+      const moveDir = vx.clone().add(vy).normalize()
+
+      //目标点到视点的单位向量-z轴
+      const eyeDir = camera.position.clone().sub(target).normalize()
+
+      //基于位移方向和视线获取旋转轴-上方向y轴
+      const axis = moveDir.clone().cross(eyeDir)
+
+      //基于旋转轴和旋转量建立四元数
+      quaternion.setFromAxisAngle(axis, angle)
+
+      update()
+    }
+
     function update() {
+      //基于平移量平移相机
       target.add(panOffset)
-      console.log(target);
       camera.position.add(panOffset)
+
+      //基于旋转量旋转相机
+      const rotateOffset = camera.position.clone()
+        .sub(target)
+        .applyQuaternion(quaternion)
+
+      camera.position.copy(
+        target.clone().add(rotateOffset)
+      )
+      camera.up.applyQuaternion(quaternion)
+
+      //更新投影视图矩阵
       camera.lookAt(target)
       camera.updateMatrixWorld(true)
       pvMatrix.multiplyMatrices(
         camera.projectionMatrix,
         camera.matrixWorldInverse,
       )
+
+      //重置旋转量和平移量
+      quaternion.setFromRotationMatrix(new Matrix4())
+      panOffset.set(0, 0, 0)
+
+      // 渲染
       render()
     }
 

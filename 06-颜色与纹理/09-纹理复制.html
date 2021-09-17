@@ -105,8 +105,8 @@
     const texture = gl.createTexture()
     gl.bindTexture(gl.TEXTURE_2D, texture)
     const image = new Image()
-    image.src = './images/erha3.jpg'
-    // image.src = './images/erha.jpg'
+    // image.src = './images/erha3.jpg'
+    image.src = './images/erha.jpg'
     image.onload = function () {
       gl.texImage2D(
         gl.TEXTURE_2D,
@@ -123,7 +123,7 @@
         gl.LINEAR
       )
 
-      gl.texParameteri(
+      /* gl.texParameteri(
         gl.TEXTURE_2D,
         gl.TEXTURE_WRAP_S,
         gl.REPEAT
@@ -132,7 +132,7 @@
         gl.TEXTURE_2D,
         gl.TEXTURE_WRAP_T,
         gl.REPEAT
-      )
+      ) */
 
       const u_Sampler = gl.getUniformLocation(gl.program, 'u_Sampler')
       gl.uniform1i(u_Sampler, 0)

@@ -101,8 +101,8 @@
     )
 
 
-    /* 平移轨道 */
-    //声明基础数据
+
+    /* 声明基础数据 */
     const mouseButtons = new Map([
       [2, 'pan']
     ])
@@ -111,6 +111,8 @@
       new Vector2(),
       new Vector2(),
     ]
+
+    /* 平移轨道 */
     const panOffset = new Vector3()
     const screenSpacePanning = true
 
@@ -161,20 +163,23 @@
       dragStart.copy(dragEnd)
     }
 
-    function pan(delta) {
-      const cameraW = camera.right - camera.left
-      const cameraH = camera.top - camera.bottom
-      const ratioX = delta.x / canvas.clientWidth
-      const ratioY = delta.y / canvas.clientHeight
+    //平移方法
+    function pan({ x, y }) {
+      const { right, left, top, bottom, matrix, position, up } = camera
+      const { clientWidth, clientHeight } = canvas
+      const cameraW = right - left
+      const cameraH = top - bottom
+      const ratioX = x / clientWidth
+      const ratioY = y / clientHeight
       const distanceLeft = ratioX * cameraW
       const distanceUp = ratioY * cameraH
-      const mx = new Vector3().setFromMatrixColumn(camera.matrix, 0)
+      const mx = new Vector3().setFromMatrixColumn(matrix, 0)
       const vx = mx.clone().multiplyScalar(-distanceLeft)
       const vy = new Vector3()
       if (screenSpacePanning) {
-        vy.setFromMatrixColumn(camera.matrix, 1)
+        vy.setFromMatrixColumn(matrix, 1)
       } else {
-        vy.crossVectors(camera.up, mx)
+        vy.crossVectors(up, mx)
       }
       vy.multiplyScalar(distanceUp)
       panOffset.copy(vx.add(vy))

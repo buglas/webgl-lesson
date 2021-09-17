@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <title>正交相机位移轨道</title>
+  <title>正交相机旋转轨道</title>
   <style>
     body {
       margin: 0;
@@ -38,7 +38,8 @@
     import { initShaders } from '../jsm/Utils.js';
     import {
       Matrix4, Vector2, Vector3, Quaternion, Object3D,
-      OrthographicCamera, PerspectiveCamera
+      OrthographicCamera, PerspectiveCamera,
+      Spherical
     } from 'https://unpkg.com/three/build/three.module.js';
     import Poly from './jsm/Poly.js'
 
@@ -102,42 +103,80 @@
 
 
     /* 声明基础数据 */
+    //鼠标事件集合
     const mouseButtons = new Map([
-      [2, 'pan']
+      [0, 'rotate'],
+      [2, 'pan'],
     ])
+    //轨道状态
     let state = 'none'
-
-    /* 平移轨道 */
+    //2PI
+    const pi2 = Math.PI * 2
+    //鼠标拖拽的起始位和结束位，无论是左键按下还是右键按下
     const [dragStart, dragEnd] = [
       new Vector2(),
       new Vector2(),
     ]
+
+    /* 平移轨道 */
+    //平移量
     const panOffset = new Vector3()
+    //是否沿相机y轴平移相机
     const screenSpacePanning = true
 
-    //在canvas上绑定鼠标事件
+    /* 缩放轨道 */
+    //滚轮在每次滚动时的缩放系数
+    const zoomScale = 0.95
+
+    /* 旋转轨道 */
+    const spherical = new Spherical()
+      .setFromVector3(
+        camera.position.clone().sub(target)
+      )
+
+    /* 取消右击菜单的显示 */
     canvas.addEventListener('contextmenu', (event) => {
       event.preventDefault()
     })
+
+    /* 指针按下时，设置拖拽起始位，获取轨道控制器状态。 */
     canvas.addEventListener('pointerdown', ({ clientX, clientY, button }) => {
       dragStart.set(clientX, clientY)
       state = mouseButtons.get(button)
     })
-    canvas.addEventListener('pointermove', (event) => {
+
+    /* 指针移动时，若控制器处于平移状态，平移相机；若控制器处于旋转状态，旋转相机。 */
+    canvas.addEventListener('pointermove', ({ clientX, clientY }) => {
+      dragEnd.set(clientX, clientY)
       switch (state) {
         case 'pan':
-          handleMouseMovePan(event)
+          pan(dragEnd.clone().sub(dragStart))
+          break
+        case 'rotate':
+          rotate(dragEnd.clone().sub(dragStart))
           break
       }
+      dragStart.copy(dragEnd)
     })
     canvas.addEventListener('pointerup', (event) => {
       state = 'none'
     })
 
-    function handleMouseMovePan({ clientX, clientY }) {
-      dragEnd.set(clientX, clientY)
-      pan(dragEnd.clone().sub(dragStart))
-      dragStart.copy(dragEnd)
+    //滚轮事件
+    canvas.addEventListener('wheel', handleMouseWheel)
+    function handleMouseWheel({ deltaY }) {
+      console.log('deltaY', deltaY);
+      if (deltaY < 0) {
+        dolly(1 / zoomScale)
+      } else {
+        dolly(zoomScale)
+      }
+      update()
+    }
+
+    function dolly(dollyScale) {
+      camera.zoom *= dollyScale
+      camera.updateProjectionMatrix()
     }
 
     //平移方法
@@ -163,16 +202,41 @@
       update()
     }
 
+    // 旋转方法
+    function rotate({ x, y }) {
+      const { clientHeight } = canvas
+      spherical.theta -= pi2 * x / clientHeight
+      spherical.phi -= pi2 * y / clientHeight
+      update()
+    }
+
     function update() {
+      //基于平移量平移相机
       target.add(panOffset)
-      console.log(target);
       camera.position.add(panOffset)
+
+      //基于旋转量旋转相机
+      const rotateOffset = new Vector3()
+        .setFromSpherical(spherical)
+      camera.position.copy(
+        target.clone().add(rotateOffset)
+      )
+
+      //更新投影视图矩阵
       camera.lookAt(target)
       camera.updateMatrixWorld(true)
       pvMatrix.multiplyMatrices(
         camera.projectionMatrix,
         camera.matrixWorldInverse,
       )
+
+      //重置旋转量和平移量
+      spherical.setFromVector3(
+        camera.position.clone().sub(target)
+      )
+      panOffset.set(0, 0, 0)
+
+      // 渲染
       render()
     }
 

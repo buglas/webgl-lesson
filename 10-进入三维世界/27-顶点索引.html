@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8">
-  <title>模型矩阵</title>
+  <title>顶点索引</title>
   <link rel="icon" href="https://img.kaikeba.com/kkb_portal_icon.ico">
   <style>
     body {
@@ -42,7 +42,7 @@
     initShaders(gl, vsSource, fsSource);
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
 
-    const verticeLib = [
+    const verticeLib = new Float32Array([
       1.0, 1.0, 1.0,
       -1.0, 1.0, 1.0,
       -1.0, -1.0, 1.0,
@@ -51,9 +51,9 @@
       1.0, 1.0, -1.0,
       -1.0, 1.0, -1.0,
       -1.0, -1.0, -1.0,
-    ];
+    ])
 
-    const indices = [
+    const indices = new Uint8Array([
       0, 1,
       1, 2,
       2, 3,
@@ -68,9 +68,9 @@
       5, 6,
       6, 7,
       7, 4
-    ];
+    ])
 
-    const arr = [];
+    /* const arr = [];
     indices.forEach(n => {
       const i = n * 3
       arr.push(
@@ -79,11 +79,11 @@
         verticeLib[i + 2] / 5,
       )
     })
-    const vertices = new Float32Array(arr)
+    const vertices = new Float32Array(arr) */
 
     const vertexBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, verticeLib, gl.STATIC_DRAW);
     const a_Position = gl.getAttribLocation(gl.program, 'a_Position');
     gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(a_Position);
@@ -97,16 +97,25 @@
     )
     //模型矩阵
     const modelMatrix = new Matrix4()
-    // modelMatrix.makeRotationY(0.3)
+    modelMatrix.makeScale(0.5, 0.5, 0.5)
 
     gl.uniformMatrix4fv(u_ViewMatrix, false, viewMatrix.elements)
     gl.uniformMatrix4fv(u_ModelMatrix, false, modelMatrix.elements)
 
+    // 建立缓冲区对象
+    const indicesBuffer = gl.createBuffer()
+    //把缓冲区绑定到webgl 上下文对象上
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indicesBuffer)
+    // 往缓冲区写数据
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW)
+
+
     gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.drawArrays(gl.LINES, 0, indices.length);
+    // gl.drawArrays(gl.LINES, 0, indices.length);
+    gl.drawElements(gl.LINES, indices.length, gl.UNSIGNED_BYTE, 0)
 
 
-    let angle = 0;
+    /* let angle = 0;
     !(function ani() {
       angle += 0.02
       modelMatrix.makeRotationY(angle)
@@ -114,7 +123,7 @@
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.drawArrays(gl.LINES, 0, indices.length);
       requestAnimationFrame(ani)
-    })()
+    })() */
 
   </script>
 </body>

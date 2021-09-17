@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <title>正交相机位移轨道</title>
+  <title>透视相机位移轨道</title>
   <style>
     body {
       margin: 0;
@@ -38,7 +38,8 @@
     import { initShaders } from '../jsm/Utils.js';
     import {
       Matrix4, Vector2, Vector3, Quaternion, Object3D,
-      OrthographicCamera, PerspectiveCamera
+      OrthographicCamera, PerspectiveCamera,
+      Spherical
     } from 'https://unpkg.com/three/build/three.module.js';
     import Poly from './jsm/Poly.js'
 
@@ -53,22 +54,21 @@
     initShaders(gl, vsSource, fsSource);
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
 
-    const halfH = 2
-    const ratio = canvas.width / canvas.height
-    const halfW = halfH * ratio
-    const [left, right, top, bottom, near, far] = [
-      -halfW, halfW, halfH, -halfH, 1, 8
-    ]
-    const eye = new Vector3(1, 1, 2)
-    const target = new Vector3(0, 0, -3)
+    const eye = new Vector3(0, 0.5, 1)
+    const target = new Vector3(0, 0, -2.5)
     const up = new Vector3(0, 1, 0)
 
-    const camera = new OrthographicCamera(
-      left, right, top, bottom, near, far
-    )
+    const [fov, aspect, near, far] = [
+      45,
+      canvas.width / canvas.height,
+      1,
+      20
+    ]
+    const camera = new PerspectiveCamera(fov, aspect, near, far)
     camera.position.copy(eye)
     camera.lookAt(target)
-    camera.updateMatrixWorld()
+    camera.updateWorldMatrix(true)
+
     const pvMatrix = new Matrix4()
     pvMatrix.multiplyMatrices(
       camera.projectionMatrix,
@@ -102,77 +102,174 @@
 
 
     /* 声明基础数据 */
+    //鼠标事件集合
     const mouseButtons = new Map([
-      [2, 'pan']
+      [0, 'rotate'],
+      [2, 'pan'],
     ])
+    //轨道状态
     let state = 'none'
-
-    /* 平移轨道 */
+    //2PI
+    const pi2 = Math.PI * 2
+    //鼠标拖拽的起始位和结束位，无论是左键按下还是右键按下
     const [dragStart, dragEnd] = [
       new Vector2(),
       new Vector2(),
     ]
-    const panOffset = new Vector3()
-    const screenSpacePanning = true
 
-    //在canvas上绑定鼠标事件
+    /* 平移轨道 */
+    //平移量
+    const panOffset = new Vector3()
+    //是否沿相机y轴平移相机
+    // const screenSpacePanning = true
+    const screenSpacePanning = false
+
+    /* 缩放轨道 */
+    //滚轮在每次滚动时的缩放系数
+    const zoomScale = 0.95
+
+    /* 旋转轨道 */
+    const spherical = new Spherical()
+      .setFromVector3(
+        camera.position.clone().sub(target)
+      )
+    //'xy','x','y'
+    // const rotateDir = 'xy'
+    // const rotateDir = 'x'
+    const rotateDir = 'y'
+
+    /* 取消右击菜单的显示 */
     canvas.addEventListener('contextmenu', (event) => {
       event.preventDefault()
     })
+
+    /* 指针按下时，设置拖拽起始位，获取轨道控制器状态。 */
     canvas.addEventListener('pointerdown', ({ clientX, clientY, button }) => {
       dragStart.set(clientX, clientY)
       state = mouseButtons.get(button)
     })
-    canvas.addEventListener('pointermove', (event) => {
+
+    /* 指针移动时，若控制器处于平移状态，平移相机；若控制器处于旋转状态，旋转相机。 */
+    canvas.addEventListener('pointermove', ({ clientX, clientY }) => {
+      dragEnd.set(clientX, clientY)
       switch (state) {
         case 'pan':
-          handleMouseMovePan(event)
+          pan(dragEnd.clone().sub(dragStart))
+          break
+        case 'rotate':
+          rotate(dragEnd.clone().sub(dragStart))
           break
       }
+      dragStart.copy(dragEnd)
     })
     canvas.addEventListener('pointerup', (event) => {
       state = 'none'
     })
 
-    function handleMouseMovePan({ clientX, clientY }) {
-      dragEnd.set(clientX, clientY)
-      pan(dragEnd.clone().sub(dragStart))
-      dragStart.copy(dragEnd)
+    //滚轮事件
+    canvas.addEventListener('wheel', handleMouseWheel)
+    function handleMouseWheel({ deltaY }) {
+      console.log('deltaY', deltaY);
+      if (deltaY < 0) {
+        dolly(1 / zoomScale)
+      } else {
+        dolly(zoomScale)
+      }
+      update()
+    }
+
+    function dolly(dollyScale) {
+      camera.zoom *= dollyScale
+      camera.updateProjectionMatrix()
     }
 
     //平移方法
     function pan({ x, y }) {
-      const { right, left, top, bottom, matrix, position, up } = camera
+      const { matrix, position, up } = camera
       const { clientWidth, clientHeight } = canvas
-      const cameraW = right - left
-      const cameraH = top - bottom
-      const ratioX = x / clientWidth
-      const ratioY = y / clientHeight
-      const distanceLeft = ratioX * cameraW
-      const distanceUp = ratioY * cameraH
+
+      //视线长度：相机视点到目标点的距离
+      const sightLen = position.clone().sub(target).length()
+      //视椎体垂直夹角的一半(弧度)
+      //(fov/2)*Math.PI/180
+      const halfFov = fov * Math.PI / 360
+      //目标平面的高度
+      const targetHeight = sightLen * Math.tan(halfFov) * 2
+
+      //目标平面与画布的高度比
+      const ratio = targetHeight / clientHeight
+
+      //画布位移量转目标平面位移量
+      const distanceLeft = x * ratio
+      const distanceUp = y * ratio
+
+      //相机平移方向
+      //鼠标水平运动时，按照相机本地坐标的x轴平移相机
       const mx = new Vector3().setFromMatrixColumn(matrix, 0)
-      const vx = mx.clone().multiplyScalar(-distanceLeft)
-      const vy = new Vector3()
+      //鼠标水平运动时，按照相机本地坐标的y轴，或者-z轴平移相机
+      const myOrz = new Vector3()
       if (screenSpacePanning) {
-        vy.setFromMatrixColumn(matrix, 1)
+        //y轴，正交相机中默认
+        myOrz.setFromMatrixColumn(matrix, 1)
       } else {
-        vy.crossVectors(up, mx)
+        //-z轴，透视相机中默认
+        myOrz.crossVectors(up, mx)
       }
-      vy.multiplyScalar(distanceUp)
+
+      //目标平面位移量转世界坐标
+      const vx = mx.clone().multiplyScalar(-distanceLeft)
+      const vy = myOrz.clone().multiplyScalar(distanceUp)
       panOffset.copy(vx.add(vy))
+
+
+      update()
+    }
+
+    // 旋转方法
+    function rotate({ x, y }) {
+      const { clientHeight } = canvas
+      const deltaT = pi2 * x / clientHeight
+      const deltaP = pi2 * y / clientHeight
+      if (rotateDir.includes('x')) {
+        spherical.theta -= deltaT
+      }
+      if (rotateDir.includes('y')) {
+        const phi = spherical.phi - deltaP
+        spherical.phi = Math.min(
+          Math.PI * 0.99999999,
+          Math.max(0.00000001, phi)
+        )
+      }
       update()
     }
 
     function update() {
+      //基于平移量平移相机
       target.add(panOffset)
-      console.log(target);
       camera.position.add(panOffset)
+
+      //基于旋转量旋转相机
+      const rotateOffset = new Vector3()
+        .setFromSpherical(spherical)
+      camera.position.copy(
+        target.clone().add(rotateOffset)
+      )
+
+      //更新投影视图矩阵
       camera.lookAt(target)
       camera.updateMatrixWorld(true)
       pvMatrix.multiplyMatrices(
         camera.projectionMatrix,
         camera.matrixWorldInverse,
       )
+
+      //重置旋转量和平移量
+      spherical.setFromVector3(
+        camera.position.clone().sub(target)
+      )
+      panOffset.set(0, 0, 0)
+
+      // 渲染
       render()
     }
 

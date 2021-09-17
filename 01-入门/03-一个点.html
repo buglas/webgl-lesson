@@ -21,19 +21,19 @@
   <canvas id="canvas"></canvas>
   <!-- 顶点着色器 -->
   <script id="vertexShader" type="x-shader/x-vertex">
-      void main(){
-        //点位
-        gl_Position=vec4(1,1,1,2);
-        //尺寸
-        gl_PointSize=50.0;
-      }
-    </script>
+    void main(){
+      //点位
+      gl_Position=vec4(1,1,1,2);
+      //尺寸
+      gl_PointSize=50.0;
+    }
+  </script>
   <!-- 片元着色器 -->
   <script id="fragmentShader" type="x-shader/x-fragment">
-      void main(){
-        gl_FragColor=vec4(1,1,0,1);
-      }
-    </script>
+    void main(){
+      gl_FragColor=vec4(1,1,0,1);
+    }
+  </script>
   <script type="module">
     import { initShaders } from "../jsm/Utils.js";
 

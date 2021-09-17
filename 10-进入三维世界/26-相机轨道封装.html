@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <title>正交相机位移轨道</title>
+  <title>透视相机缩放轨道</title>
   <style>
     body {
       margin: 0;
@@ -38,9 +38,11 @@
     import { initShaders } from '../jsm/Utils.js';
     import {
       Matrix4, Vector2, Vector3, Quaternion, Object3D,
-      OrthographicCamera, PerspectiveCamera
+      OrthographicCamera, PerspectiveCamera,
+      Spherical
     } from 'https://unpkg.com/three/build/three.module.js';
     import Poly from './jsm/Poly.js'
+    import OrbitControls from './jsm/OrbitControls.js'
 
     const canvas = document.getElementById('canvas');
     const [viewW, viewH] = [window.innerWidth, window.innerHeight]
@@ -53,7 +55,21 @@
     initShaders(gl, vsSource, fsSource);
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
 
-    const halfH = 2
+    /* 透视相机 */
+    const eye = new Vector3(1, 1, 2)
+    const target = new Vector3(0, 0, -3)
+    const up = new Vector3(0, 1, 0)
+    const [fov, aspect, near, far] = [
+      45,
+      canvas.width / canvas.height,
+      1,
+      20
+    ]
+    const camera = new PerspectiveCamera(fov, aspect, near, far)
+    camera.position.copy(eye)
+
+    /* 正交相机 */
+    /* const halfH = 2
     const ratio = canvas.width / canvas.height
     const halfW = halfH * ratio
     const [left, right, top, bottom, near, far] = [
@@ -66,15 +82,10 @@
     const camera = new OrthographicCamera(
       left, right, top, bottom, near, far
     )
-    camera.position.copy(eye)
-    camera.lookAt(target)
-    camera.updateMatrixWorld()
-    const pvMatrix = new Matrix4()
-    pvMatrix.multiplyMatrices(
-      camera.projectionMatrix,
-      camera.matrixWorldInverse,
-    )
+    camera.position.copy(eye) */
 
+
+    const pvMatrix = new Matrix4()
 
     const triangle1 = crtTriangle(
       [1, 0, 0, 1],
@@ -100,82 +111,40 @@
       new Matrix4().setPosition(0.5, 0, -2).elements
     )
 
+    /* 实例化轨道控制器 */
+    const orbit = new OrbitControls({
+      camera, target,
+      dom: canvas,
+    })
 
-    /* 声明基础数据 */
-    const mouseButtons = new Map([
-      [2, 'pan']
-    ])
-    let state = 'none'
-
-    /* 平移轨道 */
-    const [dragStart, dragEnd] = [
-      new Vector2(),
-      new Vector2(),
-    ]
-    const panOffset = new Vector3()
-    const screenSpacePanning = true
-
-    //在canvas上绑定鼠标事件
-    canvas.addEventListener('contextmenu', (event) => {
+    /* 取消右击菜单的显示 */
+    canvas.addEventListener('contextmenu', event => {
       event.preventDefault()
     })
-    canvas.addEventListener('pointerdown', ({ clientX, clientY, button }) => {
-      dragStart.set(clientX, clientY)
-      state = mouseButtons.get(button)
-    })
-    canvas.addEventListener('pointermove', (event) => {
-      switch (state) {
-        case 'pan':
-          handleMouseMovePan(event)
-          break
-      }
-    })
-    canvas.addEventListener('pointerup', (event) => {
-      state = 'none'
+
+    /* 指针按下时，设置拖拽起始位，获取轨道控制器状态。 */
+    canvas.addEventListener('pointerdown', event => {
+      orbit.pointerdown(event)
     })
 
-    function handleMouseMovePan({ clientX, clientY }) {
-      dragEnd.set(clientX, clientY)
-      pan(dragEnd.clone().sub(dragStart))
-      dragStart.copy(dragEnd)
-    }
-
-    //平移方法
-    function pan({ x, y }) {
-      const { right, left, top, bottom, matrix, position, up } = camera
-      const { clientWidth, clientHeight } = canvas
-      const cameraW = right - left
-      const cameraH = top - bottom
-      const ratioX = x / clientWidth
-      const ratioY = y / clientHeight
-      const distanceLeft = ratioX * cameraW
-      const distanceUp = ratioY * cameraH
-      const mx = new Vector3().setFromMatrixColumn(matrix, 0)
-      const vx = mx.clone().multiplyScalar(-distanceLeft)
-      const vy = new Vector3()
-      if (screenSpacePanning) {
-        vy.setFromMatrixColumn(matrix, 1)
-      } else {
-        vy.crossVectors(up, mx)
-      }
-      vy.multiplyScalar(distanceUp)
-      panOffset.copy(vx.add(vy))
-      update()
-    }
-
-    function update() {
-      target.add(panOffset)
-      console.log(target);
-      camera.position.add(panOffset)
-      camera.lookAt(target)
-      camera.updateMatrixWorld(true)
-      pvMatrix.multiplyMatrices(
-        camera.projectionMatrix,
-        camera.matrixWorldInverse,
-      )
+    /* 指针移动时，若控制器处于平移状态，平移相机；若控制器处于旋转状态，旋转相机。 */
+    canvas.addEventListener('pointermove', event => {
+      orbit.pointermove(event)
+      pvMatrix.copy(orbit.getPvMatrix())
       render()
-    }
+    })
+    canvas.addEventListener('pointerup', event => {
+      orbit.pointerup(event)
+    })
 
+    //滚轮事件
+    canvas.addEventListener('wheel', event => {
+      orbit.wheel(event)
+      pvMatrix.copy(orbit.getPvMatrix())
+      render()
+    })
+
+    pvMatrix.copy(orbit.getPvMatrix())
     render()
 
     function render() {
