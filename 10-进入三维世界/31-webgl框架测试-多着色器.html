@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>webgl框架测试</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <!-- 着纯色 -->
+  <script id="solidVertexShader" type="x-shader/x-vertex">
+      attribute vec4 a_Position;
+      uniform mat4 u_PvMatrix;
+      uniform mat4 u_ModelMatrix;
+      void main(){
+        gl_Position = u_PvMatrix*u_ModelMatrix*a_Position;
+      }
+  </script>
+  <script id="solidFragmentShader" type="x-shader/x-fragment">
+      precision mediump float;
+      uniform float u_Time;
+      void main(){
+        float r=(sin(u_Time/200.0)+1.0)/2.0;
+        gl_FragColor=vec4(r,0.7,0.4,1);
+      }
+  </script>
+
+  <!-- 着纹理 -->
+  <script id="textureVertexShader" type="x-shader/x-vertex">
+      attribute vec4 a_Position;
+      attribute vec2 a_Pin;
+      uniform mat4 u_PvMatrix;
+      uniform mat4 u_ModelMatrix;
+      varying vec2 v_Pin;
+      void main(){
+        gl_Position = u_PvMatrix*u_ModelMatrix*a_Position;
+        v_Pin=a_Pin;
+      }
+  </script>
+  <script id="textureFragmentShader" type="x-shader/x-fragment">
+      precision mediump float;
+      uniform sampler2D u_Sampler;
+      varying vec2 v_Pin;
+      void main(){
+        gl_FragColor=texture2D(u_Sampler,v_Pin);
+      }
+  </script>
+  <script type="module">
+    import { createProgram } from '../jsm/Utils.js';
+    import { Matrix4, OrthographicCamera, Vector3 } from 'https://unpkg.com/three/build/three.module.js';
+    import OrbitControls from './jsm/OrbitControls.js'
+    import Mat from './jsm/Mat.js'
+    import Geo from './jsm/Geo.js'
+    import Obj3D from './jsm/Obj3D.js'
+    import Scene from './jsm/Scene.js'
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const gl = canvas.getContext('webgl');
+    gl.clearColor(0, 0, 0, 1);
+
+    /* 相机 */
+    const halfH = 1
+    const ratio = canvas.width / canvas.height
+    const halfW = halfH * ratio
+    const [left, right, top, bottom, near, far] = [
+      -halfW, halfW, halfH, -halfH, 1, 8
+    ]
+    const eye = new Vector3(0, 0, 2)
+    const target = new Vector3(0, 0, 0)
+    const camera = new OrthographicCamera(
+      left, right, top, bottom, near, far
+    )
+    camera.position.copy(eye)
+    camera.lookAt(target)
+    camera.updateMatrixWorld()
+
+    // 场景
+    const scene = new Scene({ gl })
+
+    /* 建立纯色三角形 */
+    {
+      const vs = document.getElementById('solidVertexShader').innerText
+      const fs = document.getElementById('solidFragmentShader').innerText
+      const program = createProgram(gl, vs, fs)
+
+      // 材质
+      const mat = new Mat({
+        program,
+        data: {
+          u_Time: {
+            value: 0,
+            type: 'uniform1f'
+          },
+          u_PvMatrix: {
+            value: new Matrix4().elements,
+            type: 'uniformMatrix4fv'
+          },
+          u_ModelMatrix: {
+            value: new Matrix4().elements,
+            type: 'uniformMatrix4fv'
+          },
+        }
+      })
+
+      // 几何体
+      const geo = new Geo({
+        data: {
+          a_Position: {
+            array: new Float32Array([
+              -0.5, 0.5,
+              -0.5, -0.5,
+              0.5, -0.5,
+            ]),
+            size: 2
+          }
+        }
+      })
+
+      // 三维对象
+      const obj = new Obj3D({ geo, mat })
+
+      // 把三维对象添加到场景中
+      scene.add(obj)
+    }
+
+    /* 纹理三角形 */
+    const image = new Image()
+    image.src = './images/erha.jpg'
+    image.onload = function () {
+      const vs = document.getElementById('textureVertexShader').innerText
+      const fs = document.getElementById('textureFragmentShader').innerText
+      const program = createProgram(gl, vs, fs)
+
+      // 材质
+      const mat = new Mat({
+        program,
+        data: {
+          u_PvMatrix: {
+            value: new Matrix4().elements,
+            type: 'uniformMatrix4fv',
+          },
+          u_ModelMatrix: {
+            value: new Matrix4().elements,
+            type: 'uniformMatrix4fv',
+          },
+        },
+        maps: {
+          u_Sampler: {
+            image
+          }
+        }
+      })
+
+      // 几何体
+      const geo = new Geo({
+        data: {
+          a_Position: {
+            array: new Float32Array([
+              0.5, 0.5,
+              -0.5, 0.5,
+              0.5, -0.5,
+            ]),
+            size: 2
+          },
+          a_Pin: {
+            array: new Float32Array([
+              1, 1,
+              0, 1,
+              1, 0,
+            ]),
+            size: 2
+          }
+        },
+      })
+
+      // 三维对象
+      const obj = new Obj3D({ geo, mat })
+      scene.add(obj)
+
+      /* 统一设置uniform变量-投影视图矩阵 */
+      scene.setUniform(
+        'u_PvMatrix',
+        {
+          value: camera.projectionMatrix.clone().multiply(
+            camera.matrixWorldInverse
+          ).elements
+        }
+      )
+
+      //渲染
+      render()
+    }
+
+    function render(time = 0) {
+      scene.children[0].mat.setData(
+        'u_Time',
+        {
+          value: time
+        }
+      )
+      scene.draw()
+      requestAnimationFrame(render)
+    }
+
+  </script>
+</body>
+
+</html>

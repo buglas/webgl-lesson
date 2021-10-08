@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>webgl框架测试</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <script id="vertexShader" type="x-shader/x-vertex">
+      attribute vec4 a_Position;
+      attribute vec4 a_Color;
+      uniform mat4 u_PvMatrix;
+      uniform mat4 u_ModelMatrix;
+      varying vec4 v_Color;
+      void main(){
+        gl_Position = u_PvMatrix*u_ModelMatrix*a_Position;
+        v_Color=a_Color;
+      }
+  </script>
+  <script id="fragmentShader" type="x-shader/x-fragment">
+      precision mediump float;
+      uniform float u_Time;
+      varying vec4 v_Color;
+      void main(){
+        float r=(sin(u_Time/200.0)+1.0)/2.0;
+        gl_FragColor=vec4(v_Color.r*r,v_Color.g*(1.0-r),v_Color.ba);
+      }
+  </script>
+  <script type="module">
+    import { initShaders, createProgram } from '../jsm/Utils.js';
+    import { Matrix4, PerspectiveCamera, Vector3, Quaternion } from 'https://unpkg.com/three/build/three.module.js';
+    import OrbitControls from './jsm/OrbitControls.js'
+    import Mat from './jsm/Mat.js'
+    import Geo from './jsm/Geo.js'
+    import Obj3D from './jsm/Obj3D.js'
+    import Scene from './jsm/Scene.js'
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const gl = canvas.getContext('webgl');
+
+    const vsSource = document.getElementById('vertexShader').innerText;
+    const fsSource = document.getElementById('fragmentShader').innerText;
+    const program = createProgram(gl, vsSource, fsSource);
+    gl.clearColor(0, 0, 0, 1);
+    gl.enable(gl.DEPTH_TEST);
+
+
+
+    /* 透视相机 */
+    const eye = new Vector3(2, 3, 5)
+    const target = new Vector3(0, 0, 0)
+    const up = new Vector3(0, 1, 0)
+    const [fov, aspect, near, far] = [
+      45,
+      canvas.width / canvas.height,
+      1,
+      20
+    ]
+    const camera = new PerspectiveCamera(fov, aspect, near, far)
+    camera.position.copy(eye)
+
+    /* 实例化轨道控制器 */
+    const orbit = new OrbitControls({
+      camera, target,
+      dom: canvas,
+    })
+    orbit.update()
+
+    /* 取消右击菜单的显示 */
+    canvas.addEventListener('contextmenu', event => {
+      event.preventDefault()
+    })
+    /* 指针按下时，设置拖拽起始位，获取轨道控制器状态。 */
+    canvas.addEventListener('pointerdown', event => {
+      orbit.pointerdown(event)
+    })
+    /* 指针移动时，若控制器处于平移状态，平移相机；若控制器处于旋转状态，旋转相机。 */
+    canvas.addEventListener('pointermove', event => {
+      orbit.pointermove(event)
+    })
+    /* 指针抬起 */
+    canvas.addEventListener('pointerup', event => {
+      orbit.pointerup(event)
+    })
+    /* 滚轮事件 */
+    canvas.addEventListener('wheel', event => {
+      orbit.wheel(event)
+    })
+
+
+    const scene = new Scene({ gl })
+    const mat = new Mat({
+      program,
+      data: {
+        u_Time: {
+          value: 0,
+          type: 'uniform1f',
+        },
+        u_PvMatrix: {
+          value: orbit.getPvMatrix().elements,
+          type: 'uniformMatrix4fv',
+        },
+        u_ModelMatrix: {
+          value: new Matrix4().elements,
+          type: 'uniformMatrix4fv',
+        },
+      }
+    })
+    const geo = new Geo({
+      data: {
+        a_Position: {
+          array: new Float32Array([
+            1, 1, 1,
+            -1, 1, 1,
+            -1, -1, 1,
+            1, -1, 1,
+            1, -1, -1,
+            1, 1, -1,
+            -1, 1, -1,
+            -1, -1, -1,
+          ]),
+          size: 3
+        },
+        a_Color: {
+          array: new Float32Array([
+            1, 0, 0,
+            0, 1, 0,
+            0, 0, 1,
+            1, 1, 0,
+            0, 1, 1,
+            1, 0, 1,
+            1, 1, 1,
+            0, 0, 0
+          ]),
+          size: 3
+        },
+      },
+      index: {
+        array: new Uint8Array([
+          0, 1, 2, 0, 2, 3,    // front
+          0, 3, 4, 0, 4, 5,    // right
+          0, 5, 6, 0, 6, 1,    // up
+          1, 6, 7, 1, 7, 2,    // left
+          7, 4, 3, 7, 3, 2,    // down
+          4, 7, 6, 4, 6, 5     // back
+        ])
+      }
+    })
+    const obj = new Obj3D({ geo, mat })
+    scene.add(obj)
+
+    !(function ani(time = 0) {
+      scene.setUniform(
+        'u_PvMatrix',
+        orbit.getPvMatrix().elements
+      )
+      scene.children[0].mat.setData(
+        'u_Time',
+        {
+          value: time
+        }
+      )
+      scene.draw()
+      requestAnimationFrame(ani)
+    })()
+
+  </script>
+</body>
+
+</html>

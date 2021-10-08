@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>鼠标变换图片</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <!-- 点和线 -->
+  <script id="solidVertexShader" type="x-shader/x-vertex">
+      attribute vec4 a_Position;
+      uniform mat4 u_PvMatrix;
+      uniform mat4 u_ModelMatrix;
+      void main(){
+        gl_Position = u_PvMatrix*u_ModelMatrix*a_Position;
+        gl_PointSize=10.0;
+      }
+  </script>
+  <script id="solidFragmentShader" type="x-shader/x-fragment">
+      precision mediump float;
+      void main(){
+        gl_FragColor=vec4(1.0,1.0,1.0,1.0);
+      }
+  </script>
+  <!-- 着纹理 -->
+  <script id="textureVertexShader" type="x-shader/x-vertex">
+      attribute vec4 a_Position;
+      attribute vec2 a_Pin;
+      uniform mat4 u_PvMatrix;
+      uniform mat4 u_ModelMatrix;
+      varying vec2 v_Pin;
+      void main(){
+        gl_Position = u_PvMatrix*u_ModelMatrix*a_Position;
+        v_Pin=a_Pin;
+      }
+  </script>
+  <script id="textureFragmentShader" type="x-shader/x-fragment">
+      precision mediump float;
+      uniform sampler2D u_Sampler;
+      varying vec2 v_Pin;
+      void main(){
+        gl_FragColor=texture2D(u_Sampler,v_Pin);
+      }
+  </script>
+  <script type="module">
+    import { createProgram } from '../jsm/Utils.js';
+    import { Matrix4, OrthographicCamera, Vector3, Vector2 } from 'https://unpkg.com/three/build/three.module.js';
+    import OrbitControls from './jsm/OrbitControls.js'
+    import Mat from './jsm/Mat.js'
+    import Geo from './jsm/Geo.js'
+    import Obj3D from './jsm/Obj3D.js'
+    import Scene from './jsm/Scene.js'
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const gl = canvas.getContext('webgl');
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+
+    const halfH = 1
+    const ratio = canvas.width / canvas.height
+    const halfW = halfH * ratio
+    const [left, right, top, bottom, near, far] = [
+      -halfW, halfW, halfH, -halfH, 1, 8
+    ]
+    const eye = new Vector3(0, 0, 2)
+    const target = new Vector3(0, 0, 0)
+    const camera = new OrthographicCamera(
+      left, right, top, bottom, near, far
+    )
+    camera.position.copy(eye)
+    camera.lookAt(target)
+    camera.updateMatrixWorld()
+    const pvMatrix = camera.projectionMatrix.clone().multiply(
+      camera.matrixWorldInverse
+    )
+
+
+    /* 计算图片顶点 */
+    const [w, h] = [0.6, 0.6]
+    const [hw, hh] = [w / 2, h / 2]
+    // 图片顶点
+    const vertices = new Float32Array([
+      -hw, hh,
+      -hw, -hh,
+      hw, hh,
+      hw, -hh,
+    ])
+    // 图片外框顶点
+    const verticesOut = getVerticesOut()
+
+
+    // 变换状态
+    let state = 'none'
+    // 变换数据是否发生改变
+    let change = false
+    // 变换状态与cursor状态的对应关系
+    const cursorMap = new Map([
+      ['drag', 'move'],
+      ['rotate', 'alias'],
+      ['scale', 'pointer'],
+      ['none', 'default'],
+    ])
+    // 拖拽起始位与结束位(世界坐标系)
+    const dragStart = new Vector2()
+    const dragEnd = new Vector2()
+    // 位移量
+    let offset = new Vector2()
+
+    // 变换基点
+    const orign = new Vector2()
+    // 拖拽起始位减基点
+    const start2Orign = new Vector2()
+    // 拖拽结束位减基点
+    const end2Orign = new Vector2()
+    // 旋转起始弧度
+    let startAng = 0
+    // 旋转量
+    let angle = 0
+    // 每次旋转的弧度
+    let angSpace = Math.PI / 12
+
+    // 按键集合
+    const keys = new Set()
+    // 当前节点索引
+    let nodeInd = 0
+    // 节点对面的点的集合
+    const opposite = new Map([[0, 6], [2, 4], [6, 0], [4, 2]])
+
+    // 饭盒本地矩阵
+    const mi = new Matrix4()
+    // 冰箱本地矩阵
+    const mb = new Matrix4()
+    // 模型矩阵
+    const mm = new Matrix4()
+
+
+    // 场景
+    const scence = new Scene({ gl })
+
+    // 图片外框-点和线
+    let matOut = null
+    let geoOut = null
+    {
+      const vs = document.getElementById('solidVertexShader').innerText
+      const fs = document.getElementById('solidFragmentShader').innerText
+      const program = createProgram(gl, vs, fs)
+      matOut = new Mat({
+        program,
+        data: {
+          u_PvMatrix: {
+            value: pvMatrix.elements,
+            type: 'uniformMatrix4fv',
+          },
+          u_ModelMatrix: {
+            value: new Matrix4().elements,
+            type: 'uniformMatrix4fv',
+          },
+        },
+        mode: ['LINE_LOOP', 'POINTS']
+      })
+      geoOut = new Geo({
+        data: {
+          a_Position: {
+            array: verticesOut,
+            size: 2
+          },
+        }
+      })
+      const obj = new Obj3D({ geo: geoOut, mat: matOut })
+      scence.add(obj)
+    }
+
+    // 图片
+    const image = new Image()
+    image.src = './images/erha.jpg'
+    let mat = null
+    let geo = null
+    image.onload = function () {
+      const vs = document.getElementById('textureVertexShader').innerText
+      const fs = document.getElementById('textureFragmentShader').innerText
+      const program = createProgram(gl, vs, fs)
+      mat = new Mat({
+        program,
+        data: {
+          u_PvMatrix: {
+            value: pvMatrix.elements,
+            type: 'uniformMatrix4fv',
+          },
+          u_ModelMatrix: {
+            value: new Matrix4().elements,
+            type: 'uniformMatrix4fv',
+          },
+        },
+        maps: {
+          u_Sampler: {
+            image,
+          }
+        },
+        mode: 'TRIANGLE_STRIP'
+      })
+      geo = new Geo({
+        data: {
+          a_Position: {
+            array: vertices,
+            size: 2
+          },
+          a_Pin: {
+            array: new Float32Array([
+              0, 1,
+              0, 0,
+              1, 1,
+              1, 0,
+            ]),
+            size: 2
+          }
+        }
+      })
+      const obj = new Obj3D({ geo, mat })
+      scence.unshift(obj)
+      scence.draw()
+    }
+
+    // 鼠标按下
+    canvas.addEventListener('mousedown', event => {
+      const mp = worldPos(event)
+      if (isInImg(mp)) {
+        state = 'drag'
+        dragStart.copy(mp)
+      } else {
+        const node = selectNode(mp)
+        if (node) {
+          dragStart.copy(mp)
+          state = node.state
+          nodeInd = node.index
+          setOrign()
+          start2Orign.subVectors(dragStart, orign)
+          startAng = Math.atan2(start2Orign.y, start2Orign.x)
+        }
+      }
+    })
+    // 鼠标移动
+    canvas.addEventListener('mousemove', event => {
+      const mp = worldPos(event)
+      // 设置鼠标样式
+      if (state === 'none') {
+        let cursorState = 'none'
+        if (isInImg(mp)) {
+          cursorState = 'drag'
+        } else {
+          const node = selectNode(mp)
+          cursorState = node ? node.state : 'none'
+        }
+        canvas.style.cursor = cursorMap.get(cursorState)
+        return
+      }
+      // 变换图片
+      dragEnd.copy(mp)
+      end2Orign.subVectors(mp, orign)
+      change = true
+      switch (state) {
+        case 'drag':
+          drag()
+          break
+        case 'rotate':
+          rotate()
+          break
+      }
+      // 渲染
+      render()
+    })
+    // 鼠标抬起
+    canvas.addEventListener('mouseup', () => {
+      if (state !== 'none') {
+        state = 'none'
+        if (change) {
+          change = false
+          offset.set(0, 0)
+          angle = 0
+          canvas.style.cursor = 'default'
+          formatVertices()
+        }
+      }
+    })
+    // 键盘按下
+    window.addEventListener('keydown', ({ keyCode }) => {
+      keys.add(keyCode)
+      state !== 'none' && setOrign()
+    })
+    // 键盘抬起
+    window.addEventListener('keyup', ({ keyCode }) => {
+      keys.delete(keyCode)
+      state !== 'none' && setOrign()
+    })
+
+    // 拖拽
+    function drag() {
+      offset.subVectors(dragEnd, dragStart)
+    }
+    // 旋转
+    function rotate() {
+      const endAng = Math.atan2(end2Orign.y, end2Orign.x)
+      angle = endAng - startAng
+      if (!keys.has(16)) {
+        angle = Math.round(angle / angSpace) * angSpace
+      }
+    }
+
+    // 设置基点
+    function setOrign() {
+      const { x, y } = keys.has(18) ? getOppo() : getCenter()
+      orign.set(x, y)
+      mi.makeTranslation(-x, -y, 0)
+      mb.makeTranslation(x, y, 0)
+    }
+    // 获取中点
+    function getCenter() {
+      const [x1, y1] = [vertices[0], vertices[1]]
+      const [x2, y2] = [vertices[6], vertices[7]]
+      /* return new Vector2(
+        x1+(x2-x1)/2,
+        y1+(y2-y1)/2,
+      ) */
+      return new Vector2(
+        (x2 + x1) / 2,
+        (y2 + y1) / 2,
+      )
+    }
+    // 对面的点
+    function getOppo() {
+      const i2 = opposite.get(nodeInd)
+      return new Vector2(vertices[i2], vertices[i2 + 1])
+    }
+
+    // 选择节点
+    function selectNode(m) {
+      let node = null
+      for (let i = 0; i < vertices.length; i += 2) {
+        const v = new Vector2(vertices[i], vertices[i + 1])
+        const len = m.clone().sub(v).length() * canvas.height / 2
+        if (len < 40) {
+          node = { index: i, state: 'rotate' }
+          break
+        }
+      }
+      return node
+    }
+
+    // 格式化顶点数据
+    function formatVertices() {
+      for (let i = 0; i < vertices.length; i += 2) {
+        const p = new Vector3(vertices[i], vertices[i + 1], 0)
+          .applyMatrix4(mm)
+        vertices[i] = p.x
+        vertices[i + 1] = p.y
+      }
+      geo.setData('a_Position', {
+        array: vertices
+      })
+      geoOut.setData('a_Position', {
+        array: getVerticesOut()
+      })
+    }
+
+    // 判断鼠标是否在图像中
+    function isInImg(p) {
+      return inTriangle(
+        p,
+        [
+          { x: vertices[0], y: vertices[1] },
+          { x: vertices[2], y: vertices[3] },
+          { x: vertices[4], y: vertices[5] },
+        ]
+      ) || inTriangle(
+        p,
+        [
+          { x: vertices[4], y: vertices[5] },
+          { x: vertices[2], y: vertices[3] },
+          { x: vertices[6], y: vertices[7] },
+        ]
+      )
+    }
+    // 判断点位是否在三角形中的方法
+    function inTriangle(p0, triangle) {
+      let bool = true;
+      for (let i = 0; i < 3; i++) {
+        const j = (i + 1) % 3;
+        const [p1, p2] = [triangle[i], triangle[j]];
+        if (cross([p0, p1, p2]) < 0) {
+          bool = false;
+          break
+        }
+      }
+      return bool;
+    }
+    // 叉乘
+    function cross([p0, p1, p2]) {
+      const [ax, ay, bx, by] = [
+        p1.x - p0.x,
+        p1.y - p0.y,
+        p2.x - p0.x,
+        p2.y - p0.y,
+      ];
+      return ax * by - bx * ay;
+    }
+
+
+    // 鼠标在canvas画布中的位置转世界位
+    function worldPos({ clientX, clientY }) {
+      const [hw, hh] = [canvas.width / 2, canvas.height / 2]
+      // 裁剪空间位
+      const cp = new Vector3(
+        (clientX - hw) / hw,
+        -(clientY - hh) / hh,
+        0
+      )
+      // 鼠标在世界坐标系中的位置
+      const p = cp.applyMatrix4(
+        pvMatrix.clone().invert()
+      )
+      return new Vector2(p.x, p.y)
+    }
+
+
+    /* 基于图片顶点vertices获取图片外框顶点verticesOut */
+    function getVerticesOut() {
+      return new Float32Array([
+        vertices[0], vertices[1],
+        vertices[2], vertices[3],
+        vertices[6], vertices[7],
+        vertices[4], vertices[5],
+      ])
+    }
+
+    // 获取模型矩阵
+    function getModelMatrix() {
+      // 位移矩阵
+      const { x: px, y: py } = offset
+      const moveMatrix = new Matrix4().set(
+        1, 0, 0, px,
+        0, 1, 0, py,
+        0, 0, 1, 0,
+        0, 0, 0, 1,
+      )
+      // 旋转矩阵
+      const [s, c] = [Math.sin(angle), Math.cos(angle)]
+      const rotateMatrix = new Matrix4().set(
+        c, -s, 0, 0,
+        s, c, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1,
+      )
+      // 模型矩阵
+      return mb.clone()
+        .multiply(moveMatrix)
+        .multiply(rotateMatrix)
+        .multiply(mi)
+    }
+
+    // 渲染
+    function render() {
+      const { elements } = mm.copy(getModelMatrix())
+      mat.setData('u_ModelMatrix', {
+        value: elements
+      })
+      matOut.setData('u_ModelMatrix', {
+        value: elements
+      })
+      scence.draw()
+    }
+
+
+  </script>
+</body>
+
+</html>

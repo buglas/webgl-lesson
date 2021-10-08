@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>基点变换</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <!-- 着纯色 -->
+  <script id="solidVertexShader" type="x-shader/x-vertex">
+      attribute vec4 a_Position;
+      uniform mat4 u_PvMatrix;
+      uniform mat4 u_ModelMatrix;
+      void main(){
+        gl_Position = u_PvMatrix*u_ModelMatrix*a_Position;
+      }
+  </script>
+  <script id="solidFragmentShader" type="x-shader/x-fragment">
+      precision mediump float;
+      uniform float u_Time;
+      void main(){
+        float r=(sin(u_Time/200.0)+1.0)/2.0;
+        gl_FragColor=vec4(r,0.7,0.4,1);
+      }
+  </script>
+
+  <!-- 着纹理 -->
+  <script id="textureVertexShader" type="x-shader/x-vertex">
+      attribute vec4 a_Position;
+      attribute vec2 a_Pin;
+      uniform mat4 u_PvMatrix;
+      uniform mat4 u_ModelMatrix;
+      varying vec2 v_Pin;
+      void main(){
+        gl_Position = u_PvMatrix*u_ModelMatrix*a_Position;
+        v_Pin=a_Pin;
+      }
+  </script>
+  <script id="textureFragmentShader" type="x-shader/x-fragment">
+      precision mediump float;
+      uniform sampler2D u_Sampler;
+      varying vec2 v_Pin;
+      void main(){
+        gl_FragColor=texture2D(u_Sampler,v_Pin);
+      }
+  </script>
+  <script type="module">
+    import { createProgram } from '../jsm/Utils.js';
+    import { Matrix4, OrthographicCamera, Vector3, Vector2 } from 'https://unpkg.com/three/build/three.module.js';
+    import OrbitControls from './jsm/OrbitControls.js'
+    import Mat from './jsm/Mat.js'
+    import Geo from './jsm/Geo.js'
+    import Obj3D from './jsm/Obj3D.js'
+    import Scene from './jsm/Scene.js'
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const gl = canvas.getContext('webgl');
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+
+    const halfH = 1
+    const ratio = canvas.width / canvas.height
+    const halfW = halfH * ratio
+    const [left, right, top, bottom, near, far] = [
+      -halfW, halfW, halfH, -halfH, 1, 8
+    ]
+    const eye = new Vector3(0, 0, 2)
+    const target = new Vector3(0, 0, 0)
+    const camera = new OrthographicCamera(
+      left, right, top, bottom, near, far
+    )
+    camera.position.copy(eye)
+    camera.lookAt(target)
+    camera.updateMatrixWorld()
+    const pvMatrix = camera.projectionMatrix.clone().multiply(
+      camera.matrixWorldInverse
+    )
+    const scence = new Scene({ gl })
+
+    /* 计算图片顶点 */
+    const [w, h] = [0.6, 0.6]
+    const [hw, hh] = [w / 2, h / 2]
+    const vertices = new Float32Array([
+      -hw, hh,
+      -hw, -hh,
+      hw, hh,
+      hw, -hh,
+    ])
+
+    // 饭盒本地矩阵
+    const mi = new Matrix4()
+    // 冰箱本地矩阵
+    const mb = new Matrix4()
+    //模型矩阵
+    const mm = new Matrix4()
+    //基点
+    let orignInd = 4
+
+    // 基于图片的变换基点布阵
+    setOrign(orignInd)
+    function setOrign(i) {
+      const [x, y] = [vertices[i], vertices[i + 1]]
+      mi.setPosition(-x, -y, 0)
+      mb.setPosition(x, y, 0)
+    }
+
+    const image = new Image()
+    image.src = './images/erha.jpg'
+    let mat = null
+    image.onload = function () {
+      const vs = document.getElementById('textureVertexShader').innerText
+      const fs = document.getElementById('textureFragmentShader').innerText
+      const program = createProgram(gl, vs, fs)
+      mat = new Mat({
+        program,
+        data: {
+          u_PvMatrix: {
+            value: pvMatrix.elements,
+            type: 'uniformMatrix4fv',
+          },
+          u_ModelMatrix: {
+            value: new Matrix4().elements,
+            type: 'uniformMatrix4fv',
+          },
+        },
+        maps: {
+          u_Sampler: {
+            image,
+          }
+        },
+        mode: 'TRIANGLE_STRIP'
+      })
+      const geo = new Geo({
+        data: {
+          a_Position: {
+            array: vertices,
+            size: 2
+          },
+          a_Pin: {
+            array: new Float32Array([
+              0, 1,
+              0, 0,
+              1, 1,
+              1, 0,
+            ]),
+            size: 2
+          }
+        }
+      })
+      const obj = new Obj3D({ geo, mat })
+      scence.add(obj)
+      render()
+    }
+
+    let ang = 0
+    function render() {
+      ang += 0.02
+      const s = (Math.sin(ang) + 1) / 2
+      mm.copy(
+        mb.clone()
+          .multiply(
+            new Matrix4().makeRotationZ(ang)
+          )
+          .scale(new Vector3(s, s, 1))
+          .multiply(mi)
+      )
+      mat.setData('u_ModelMatrix', {
+        value: mm.elements
+      })
+      scence.draw()
+      requestAnimationFrame(render)
+    }
+
+  </script>
+</body>
+
+</html>

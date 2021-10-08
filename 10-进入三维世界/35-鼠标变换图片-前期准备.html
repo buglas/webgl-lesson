@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>鼠标变换图片</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <!-- 点和线 -->
+  <script id="solidVertexShader" type="x-shader/x-vertex">
+      attribute vec4 a_Position;
+      uniform mat4 u_PvMatrix;
+      uniform mat4 u_ModelMatrix;
+      void main(){
+        gl_Position = u_PvMatrix*u_ModelMatrix*a_Position;
+        gl_PointSize=10.0;
+      }
+  </script>
+  <script id="solidFragmentShader" type="x-shader/x-fragment">
+      precision mediump float;
+      void main(){
+        gl_FragColor=vec4(1.0,1.0,1.0,1.0);
+      }
+  </script>
+  <!-- 着纹理 -->
+  <script id="textureVertexShader" type="x-shader/x-vertex">
+      attribute vec4 a_Position;
+      attribute vec2 a_Pin;
+      uniform mat4 u_PvMatrix;
+      uniform mat4 u_ModelMatrix;
+      varying vec2 v_Pin;
+      void main(){
+        gl_Position = u_PvMatrix*u_ModelMatrix*a_Position;
+        v_Pin=a_Pin;
+      }
+  </script>
+  <script id="textureFragmentShader" type="x-shader/x-fragment">
+      precision mediump float;
+      uniform sampler2D u_Sampler;
+      varying vec2 v_Pin;
+      void main(){
+        gl_FragColor=texture2D(u_Sampler,v_Pin);
+      }
+  </script>
+  <script type="module">
+    import { createProgram } from '../jsm/Utils.js';
+    import { Matrix4, OrthographicCamera, Vector3, Vector2 } from 'https://unpkg.com/three/build/three.module.js';
+    import OrbitControls from './jsm/OrbitControls.js'
+    import Mat from './jsm/Mat.js'
+    import Geo from './jsm/Geo.js'
+    import Obj3D from './jsm/Obj3D.js'
+    import Scene from './jsm/Scene.js'
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const gl = canvas.getContext('webgl');
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+
+    const halfH = 1
+    const ratio = canvas.width / canvas.height
+    const halfW = halfH * ratio
+    const [left, right, top, bottom, near, far] = [
+      -halfW, halfW, halfH, -halfH, 1, 8
+    ]
+    const eye = new Vector3(0, 0, 2)
+    const target = new Vector3(0, 0, 0)
+    const camera = new OrthographicCamera(
+      left, right, top, bottom, near, far
+    )
+    camera.position.copy(eye)
+    camera.lookAt(target)
+    camera.updateMatrixWorld()
+    const pvMatrix = camera.projectionMatrix.clone().multiply(
+      camera.matrixWorldInverse
+    )
+
+
+    /* 计算图片顶点 */
+    const [w, h] = [0.6, 0.6]
+    const [hw, hh] = [w / 2, h / 2]
+    // 图片顶点
+    const vertices = new Float32Array([
+      -hw, hh,
+      -hw, -hh,
+      hw, hh,
+      hw, -hh,
+    ])
+    // 图片外框顶点
+    const verticesOut = getVerticesOut()
+
+
+    // 场景
+    const scence = new Scene({ gl })
+
+    // 图片外框-点和线
+    let matOut = null
+    let geoOut = null
+    {
+      const vs = document.getElementById('solidVertexShader').innerText
+      const fs = document.getElementById('solidFragmentShader').innerText
+      const program = createProgram(gl, vs, fs)
+      matOut = new Mat({
+        program,
+        data: {
+          u_PvMatrix: {
+            value: pvMatrix.elements,
+            type: 'uniformMatrix4fv',
+          },
+          u_ModelMatrix: {
+            value: new Matrix4().elements,
+            type: 'uniformMatrix4fv',
+          },
+        },
+        mode: ['LINE_LOOP', 'POINTS']
+      })
+      geoOut = new Geo({
+        data: {
+          a_Position: {
+            array: verticesOut,
+            size: 2
+          },
+        }
+      })
+      const obj = new Obj3D({ geo: geoOut, mat: matOut })
+      scence.add(obj)
+    }
+
+    // 图片
+    const image = new Image()
+    image.src = './images/erha.jpg'
+    let mat = null
+    let geo = null
+    image.onload = function () {
+      const vs = document.getElementById('textureVertexShader').innerText
+      const fs = document.getElementById('textureFragmentShader').innerText
+      const program = createProgram(gl, vs, fs)
+      mat = new Mat({
+        program,
+        data: {
+          u_PvMatrix: {
+            value: pvMatrix.elements,
+            type: 'uniformMatrix4fv',
+          },
+          u_ModelMatrix: {
+            value: new Matrix4().elements,
+            type: 'uniformMatrix4fv',
+          },
+        },
+        maps: {
+          u_Sampler: {
+            image,
+          }
+        },
+        mode: 'TRIANGLE_STRIP'
+      })
+      geo = new Geo({
+        data: {
+          a_Position: {
+            array: vertices,
+            size: 2
+          },
+          a_Pin: {
+            array: new Float32Array([
+              0, 1,
+              0, 0,
+              1, 1,
+              1, 0,
+            ]),
+            size: 2
+          }
+        }
+      })
+      const obj = new Obj3D({ geo, mat })
+      scence.unshift(obj)
+      scence.draw()
+    }
+
+    /* 基于图片顶点vertices获取图片外框顶点verticesOut */
+    function getVerticesOut() {
+      return new Float32Array([
+        vertices[0], vertices[1],
+        vertices[2], vertices[3],
+        vertices[6], vertices[7],
+        vertices[4], vertices[5],
+      ])
+    }
+
+  </script>
+</body>
+
+</html>
