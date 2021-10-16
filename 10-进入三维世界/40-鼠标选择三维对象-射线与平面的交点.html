@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>鼠标选择三维对象</title>
+</head>
+
+<body>
+  <script type="module">
+    import {
+      Matrix4, OrthographicCamera, Vector3, Vector2,
+      Plane, Ray
+    } from 'https://unpkg.com/three/build/three.module.js';
+
+    // 三角形ABC
+    /* const A = new Vector3(-6, 0, -4)
+    const B = new Vector3(0, 0, 4)
+    const C = new Vector3(6, 0, -4) */
+    /* const A = new Vector3(-6, 6, -4)
+    const B = new Vector3(0, 6, 4)
+    const C = new Vector3(6, 6, -4) */
+    const A = new Vector3(-6, 9, -4)
+    const B = new Vector3(0, 9, 4)
+    const C = new Vector3(6, 9, -4)
+
+    // 视点
+    const E = new Vector3(0, 12, 16)
+    // 鼠标点
+    const P = new Vector3(0, 3, 4)
+
+    {
+      // 三角形ABC的法线
+      const AB = new Vector3().subVectors(B, A)
+      const BC = new Vector3().subVectors(C, B)
+      //法线-垂直于向量AB、BC的一条单位向量
+      const n = new Vector3().crossVectors(AB, BC).normalize()
+
+      // 射线方向
+      const v = new Vector3().subVectors(P, E).normalize()
+
+      // 交点M=((A-E)·n/v·n)*v+E
+      const M = v.clone().multiplyScalar(
+        A.clone().sub(E).dot(n) / v.clone().dot(n)
+      ).add(E)
+
+      console.log('M', M);
+    }
+
+    {
+      const plane = new Plane().setFromCoplanarPoints(A, B, C)
+      /* const v=new Vector3().subVectors(P,E).normalize()
+      const ray=new Ray(E,v) */
+      const ray = new Ray(E).lookAt(P)
+      const M = new Vector3()
+      ray.intersectPlane(plane, M)
+
+      console.log('M-three', M);
+    }
+
+  </script>
+</body>
+
+</html>
