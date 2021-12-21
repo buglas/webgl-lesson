@@ -168,7 +168,9 @@
 
     function popVertice() {
       poly.geoData.pop()
-      compose.children.pop()
+      const { children } = compose
+      const last = children[children.length - 1]
+      children.delete(last)
       poly = null
     }
 

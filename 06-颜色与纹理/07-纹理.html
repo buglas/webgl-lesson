@@ -99,7 +99,7 @@
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1)
 
     /* 准备三个角色 */
-    gl.activeTexture(gl.TEXTURE0)
+    gl.activeTexture(gl.TEXTURE1)
     const texture = gl.createTexture()
     gl.bindTexture(gl.TEXTURE_2D, texture)
     const image = new Image()
@@ -121,7 +121,7 @@
       )
 
       const u_Sampler = gl.getUniformLocation(gl.program, 'u_Sampler')
-      gl.uniform1i(u_Sampler, 0)
+      gl.uniform1i(u_Sampler, 1)
 
       render()
     }

@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>锥形灯</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <!-- 法线 -->
+  <script id="vl" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    uniform mat4 u_PvMatrix;
+    void main(){
+      gl_Position=u_PvMatrix*a_Position;
+    }
+  </script>
+  <script id="fl" type="x-shader/x-fragment">
+    void main(){
+      gl_FragColor=vec4(1.0);
+    }
+  </script>
+
+  <!-- Blinn-Phong -->
+  <script id="vs" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    attribute vec3 a_Normal;
+    uniform mat4 u_PvMatrix;
+    uniform mat4 u_ModelMatrix;
+    varying vec3 v_Normal;
+    varying vec3 v_Position;
+    void main(){
+      vec4 worldPos=u_ModelMatrix*a_Position;
+      gl_Position = u_PvMatrix*worldPos;
+      v_Normal=normalize(mat3(u_ModelMatrix)*a_Normal);
+      v_Position=vec3(worldPos);
+    }
+  </script>
+  <script id="fs" type="x-shader/x-fragment">
+    precision mediump float;
+    //漫反射系数
+    uniform vec3 u_Kd;
+    //镜面反射系数
+    uniform vec3 u_Ks;
+    //环境光反射系数
+    uniform vec3 u_Ka;
+    //视点
+    uniform vec3 u_Eye;
+    // 筒灯位置
+    uniform vec3 u_LightPos;
+    // 筒灯目标点 
+    uniform vec3 u_LightTarget;
+    //灯光强度
+    uniform float u_Intensity;
+
+    //衰减起始距离
+    uniform float u_Dist1;
+    //衰减结束距离
+    uniform float u_Dist2;
+
+    //衰减起始范围
+    uniform float u_Fov1;
+    //衰减结束范围
+    uniform float u_Fov2;    
+
+
+    //法线插值
+    varying vec3 v_Normal;
+    //点位插值
+    varying vec3 v_Position;
+
+    void main(){
+      //光线方向
+      vec3 lightDir=normalize(u_LightPos-u_LightTarget);
+      //法线插值归一化
+      vec3 normal=normalize(v_Normal);
+      //视点看向当前着色点的视线
+      vec3 eyeDir=normalize(u_Eye-v_Position);
+      //角平分线
+      vec3 h=normalize(eyeDir+lightDir);
+      //漫反射
+      vec3 diffuse=u_Kd*max(0.0,dot(normal,lightDir));
+      //镜面反射
+      vec3 specular=u_Ks*pow(
+        max(0.0,dot(normal,h)),
+        64.0
+      );
+
+      //着色点到光源的方向
+      vec3 pl=u_LightPos-v_Position;
+      
+      //当前着色点到筒灯光源平面的距离
+      float dist=dot(pl,lightDir);
+      //光线方向的衰减
+      float fallX=1.0-smoothstep(u_Dist1,u_Dist2,dist);
+
+      //衰减范围
+      float r1=tan(u_Fov1)*dist;
+      float r2=tan(u_Fov2)*dist;
+      //着色点到光线的距离
+      float r=length(cross(pl,lightDir));
+      //光线垂直方向的衰减
+      float fallY=1.0-smoothstep(r1,r2,r);
+
+      //取消灯光背面的照明
+      float fallB=step(0.0,dist);
+
+      //筒灯作用于当前着色点的亮度
+      float intensity=u_Intensity*fallY*fallX*fallB;
+      //着色点颜色
+      vec3 color=intensity*(diffuse+specular)+u_Ka;
+
+      gl_FragColor=vec4(color,1.0);
+    }
+  </script>
+  <script type="module">
+    import { createProgram, imgPromise } from '/jsm/Utils.js';
+    import {
+      Matrix4, PerspectiveCamera, Vector3,
+      SphereGeometry
+    } from 'https://unpkg.com/three/build/three.module.js';
+    import OrbitControls from './lv/OrbitControls.js'
+    import Mat from './lv/Mat.js'
+    import Geo from './lv/Geo.js'
+    import Obj3D from './lv/Obj3D.js'
+    import Scene from './lv/Scene.js'
+    import Sphere from './lv/Sphere.js'
+    import Backdrop from './lv/Backdrop.js'
+    import { gouraudShading } from './lv/ShadingFrequency.js'
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    let gl = canvas.getContext('webgl');
+    gl.clearColor(0, 0, 0, 1);
+    gl.enable(gl.DEPTH_TEST);
+
+
+    // 目标点
+    const target = new Vector3()
+    //视点
+    const eye = new Vector3(0, 4, 10)
+    const [fov, aspect, near, far] = [
+      45, canvas.width / canvas.height,
+      1, 50
+    ]
+    // 透视相机
+    const camera = new PerspectiveCamera(fov, aspect, near, far)
+    camera.position.copy(eye)
+    // 轨道控制器
+    const orbit = new OrbitControls({ camera, target, dom: canvas, })
+
+    /* 球体 */
+    const sphere = new Sphere(0.5, 18, 18)
+    const { vertices, indexes } = sphere
+    const normals = gouraudShading(vertices, indexes)
+    //球体模型矩阵
+    const sphereMatrix = new Matrix4().setPosition(0, sphere.r, 0)
+
+    /* 幕布 */
+    const backdrop = new Backdrop(20, 10, 10)
+    // 幕布模型矩阵
+    const backMatrix = new Matrix4().setPosition(0, 0, -1)
+
+    // 漫反射系数-颜色
+    const u_Kd = [0.7, 0.7, 0.7]
+    // 镜面反射系数-颜色
+    const u_Ks = [0.2, 0.2, 0.2]
+    // 环境光系数-颜色
+    const u_Ka = [0.2, 0.2, 0.2]
+
+    // 锥形灯位置
+    const u_LightPos = new Vector3(0, 7, 1)
+    // 锥形灯标点
+    const u_LightTarget = new Vector3()
+    // 光照强度
+    const u_Intensity = 1
+    // 衰减起始距离
+    const u_Dist1 = 0
+    // 衰减结束距离
+    const u_Dist2 = 18
+    // 衰减起始范围
+    const u_Fov1 = 20 * Math.PI / 180
+    // 衰减结束范围
+    const u_Fov2 = u_Fov1 + 5 * Math.PI / 180
+
+    // 灯光数据
+    const lightData = {
+      u_LightPos: {
+        value: [...u_LightPos],
+        type: 'uniform3fv',
+      },
+      u_LightTarget: {
+        value: [...u_LightTarget],
+        type: 'uniform3fv',
+      },
+      u_Intensity: {
+        value: u_Intensity,
+        type: 'uniform1f',
+      },
+      u_Fov1: {
+        value: u_Fov1,
+        type: 'uniform1f',
+      },
+      u_Fov2: {
+        value: u_Fov2,
+        type: 'uniform1f',
+      },
+      u_Dist1: {
+        value: u_Dist1,
+        type: 'uniform1f',
+      },
+      u_Dist2: {
+        value: u_Dist2,
+        type: 'uniform1f',
+      },
+    }
+    // 材质数据
+    const matData = {
+      u_Kd: {
+        value: u_Kd,
+        type: 'uniform3fv',
+      },
+      u_Ks: {
+        value: u_Ks,
+        type: 'uniform3fv',
+      },
+      u_Ka: {
+        value: u_Ka,
+        type: 'uniform3fv',
+      },
+    }
+    // 相机数据
+    const cameraData = {
+      u_PvMatrix: {
+        value: orbit.getPvMatrix().elements,
+        type: 'uniformMatrix4fv',
+      },
+      u_Eye: {
+        value: Object.values(camera.position),
+        type: 'uniform3fv',
+      },
+    }
+
+    // 场景
+    const scene = new Scene({ gl })
+    // 注册程序对象
+    scene.registerProgram(
+      'Blinn-Phong',
+      {
+        program: createProgram(
+          gl,
+          document.getElementById('vs').innerText,
+          document.getElementById('fs').innerText
+        ),
+        attributeNames: ['a_Position', 'a_Normal'],
+        uniformNames: [
+          'u_PvMatrix', 'u_ModelMatrix', 'u_Eye',
+          'u_Kd', 'u_Ks', 'u_Ka',
+          'u_LightPos', 'u_LightTarget', 'u_Intensity',
+          'u_Dist1', 'u_Dist2',
+          'u_Fov1', 'u_Fov2',
+        ]
+      }
+    )
+    // 球体
+    const matSphere = new Mat({
+      program: 'Blinn-Phong',
+      data: {
+        u_ModelMatrix: {
+          value: sphereMatrix.elements,
+          type: 'uniformMatrix4fv',
+        },
+        ...cameraData,
+        ...lightData,
+        ...matData
+      },
+      mode: 'TRIANGLES',
+    })
+    const geoSphere = new Geo({
+      data: {
+        a_Position: {
+          array: vertices,
+          size: 3
+        },
+        a_Normal: {
+          array: normals,
+          size: 3
+        },
+      },
+      index: {
+        array: indexes
+      }
+    })
+    const objSphere = new Obj3D({ geo: geoSphere, mat: matSphere })
+    scene.add(objSphere)
+
+    // 幕布
+    const matBack = new Mat({
+      program: 'Blinn-Phong',
+      data: {
+        u_ModelMatrix: {
+          value: backMatrix.elements,
+          type: 'uniformMatrix4fv',
+        },
+        ...cameraData,
+        ...lightData,
+        ...matData
+      },
+    })
+    const geoBack = new Geo({
+      data: {
+        a_Position: {
+          array: backdrop.vertices,
+          size: 3
+        },
+        a_Normal: {
+          array: backdrop.normals,
+          size: 3
+        },
+      },
+      index: {
+        array: backdrop.indexes
+      }
+    })
+    const objBack = new Obj3D({ mat: matBack, geo: geoBack })
+    scene.add(objBack)
+
+    !(function render() {
+      orbit.getPvMatrix()
+      scene.setUniform('u_Eye', {
+        value: Object.values(camera.position)
+      })
+      scene.draw()
+      requestAnimationFrame(render)
+    })()
+
+    /* 取消右击菜单的显示 */
+    canvas.addEventListener('contextmenu', event => {
+      event.preventDefault()
+    })
+    /* 指针按下时，设置拖拽起始位，获取轨道控制器状态。 */
+    canvas.addEventListener('pointerdown', event => {
+      orbit.pointerdown(event)
+    })
+    /* 指针移动时，若控制器处于平移状态，平移相机；若控制器处于旋转状态，旋转相机。 */
+    canvas.addEventListener('pointermove', event => {
+      orbit.pointermove(event)
+    })
+    /* 指针抬起 */
+    canvas.addEventListener('pointerup', event => {
+      orbit.pointerup(event)
+    })
+    /* 滚轮事件 */
+    canvas.addEventListener('wheel', event => {
+      orbit.wheel(event)
+    })
+
+
+  </script>
+</body>
+
+</html>

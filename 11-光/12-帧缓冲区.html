@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>帧缓冲区</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+
+    #canvas {
+      background-color: antiquewhite;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <!-- 顶点着色器 -->
+  <script id="vs1" type="x-shader/x-vertex">
+    void main(){
+      //点位
+      gl_Position=vec4(0,0,0,1);
+      //尺寸
+      gl_PointSize=100.0;
+    }
+  </script>
+  <!-- 片元着色器 -->
+  <script id="fs1" type="x-shader/x-fragment">
+    void main(){
+      gl_FragColor=vec4(1,1,0,1);
+    }
+  </script>
+  <script type="module">
+    import { createProgram } from "/jsm/Utils.js";
+
+    const canvas = document.querySelector("#canvas");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // 获取着色器文本
+    const vs1 = document.querySelector("#vs1").innerText;
+    const fs1 = document.querySelector("#fs1").innerText;
+
+    //三维画笔
+    const gl = canvas.getContext("webgl");
+
+    console.log(gl.getParameter(gl.VIEWPORT));
+
+    //建立程序对象
+    const program1 = createProgram(gl, vs1, fs1);
+    gl.useProgram(program1)
+
+    //纹理对象
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1)
+    gl.activeTexture(gl.TEXTURE0)
+    let texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(
+      gl.TEXTURE_2D,
+      gl.TEXTURE_MIN_FILTER,
+      gl.LINEAR
+    );
+    gl.texImage2D(
+      gl.TEXTURE_2D, 0, gl.RGBA, 256, 256,
+      0, gl.RGBA, gl.UNSIGNED_BYTE, null
+    );
+
+    //帧缓冲区
+    const framebuffer = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+    gl.framebufferTexture2D(
+      gl.FRAMEBUFFER,
+      gl.COLOR_ATTACHMENT0,
+      gl.TEXTURE_2D,
+      texture, 0
+    );
+
+    //设置渲染尺寸
+    gl.viewport(0, 0, 256, 256);
+
+
+    //声明颜色 rgba
+    gl.clearColor(0.4, 0.6, 0.9, 1.0);
+    //刷底色
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    //绘制顶点
+    gl.drawArrays(gl.POINTS, 0, 1);
+  </script>
+</body>
+
+</html>

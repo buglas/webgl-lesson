@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>深度测试</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+
+    #canvas {
+      background-color: antiquewhite;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <!-- 帧缓冲区里的点 -->
+  <script id="vs1" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    varying float v_Z;
+    void main(){
+      //点位
+      gl_Position=a_Position;
+      //尺寸
+      gl_PointSize=200.0;
+      v_Z=a_Position.z;
+    }
+  </script>
+  <script id="fs1" type="x-shader/x-fragment">
+    precision mediump float;
+    varying float v_Z;
+    void main(){
+      gl_FragColor=vec4(vec3(v_Z),1);
+    }
+  </script>
+  <!-- 纹理着色器 -->
+  <script id="vs2" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    attribute vec2 a_Pin;
+    varying vec2 v_Pin;
+    void main(){
+      gl_Position = a_Position;
+      v_Pin=a_Pin;
+    }
+  </script>
+  <script id="fs2" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform sampler2D u_Sampler;
+    varying vec2 v_Pin;
+    void main(){
+      gl_FragColor=texture2D(u_Sampler,v_Pin);
+    }
+  </script>
+  <script type="module">
+    import { createProgram } from "/jsm/Utils.js";
+
+    const canvas = document.querySelector("#canvas");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // 获取着色器文本
+    const vs1 = document.querySelector("#vs1").innerText;
+    const fs1 = document.querySelector("#fs1").innerText;
+
+    //三维画笔
+    const gl = canvas.getContext("webgl");
+
+    let texture = null
+
+    {
+      const vs1 = document.getElementById('vs1').innerText;
+      const fs1 = document.getElementById('fs1').innerText;
+      const program1 = createProgram(gl, vs1, fs1);
+      gl.useProgram(program1)
+      gl.enable(gl.DEPTH_TEST);
+
+      const source = new Float32Array([
+        -0.1, 0.1, 0,
+        0.1, -0.1, 0.9,
+      ])
+      const buffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, source, gl.STATIC_DRAW);
+      const a_Position = gl.getAttribLocation(program1, 'a_Position');
+      gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
+      gl.enableVertexAttribArray(a_Position);
+
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1)
+      gl.activeTexture(gl.TEXTURE0)
+      texture = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texParameteri(
+        gl.TEXTURE_2D,
+        gl.TEXTURE_MIN_FILTER,
+        gl.LINEAR
+      );
+      gl.texImage2D(
+        gl.TEXTURE_2D, 0, gl.RGBA, 512, 512,
+        0, gl.RGBA, gl.UNSIGNED_BYTE, null
+      );
+
+      const framebuffer = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+      gl.framebufferTexture2D(
+        gl.FRAMEBUFFER,
+        gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D,
+        texture, 0
+      );
+
+      const depthbuffer = gl.createRenderbuffer();
+      gl.bindRenderbuffer(gl.RENDERBUFFER, depthbuffer);
+      gl.renderbufferStorage(
+        gl.RENDERBUFFER, gl.DEPTH_COMPONENT16,
+        512, 512
+      );
+      gl.framebufferRenderbuffer(
+        gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT,
+        gl.RENDERBUFFER, depthbuffer
+      );
+
+      gl.viewport(0, 0, 512, 512);
+      gl.clearColor(0.3, 0.5, 0.8, 1.0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.drawArrays(gl.POINTS, 0, 2);
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, canvas.width, canvas.height);
+    }
+
+    {
+      const vs2 = document.getElementById('vs2').innerText;
+      const fs2 = document.getElementById('fs2').innerText;
+      const program2 = createProgram(gl, vs2, fs2);
+      gl.useProgram(program2)
+
+      const source = new Float32Array([
+        -0.5, 0.5, 0, 1,
+        -0.5, -0.5, 0, 0,
+        0.5, 0.5, 1, 1,
+        0.5, -0.5, 1, 0
+      ])
+      const buffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, source, gl.STATIC_DRAW);
+      const a_Position = gl.getAttribLocation(program2, 'a_Position');
+      gl.vertexAttribPointer(a_Position, 2, gl.FLOAT, false, 16, 0);
+      gl.enableVertexAttribArray(a_Position);
+      const a_Pin = gl.getAttribLocation(program2, 'a_Pin');
+      gl.vertexAttribPointer(a_Pin, 2, gl.FLOAT, false, 16, 8);
+      gl.enableVertexAttribArray(a_Pin);
+
+      gl.bindTexture(gl.TEXTURE_2D, texture)
+      const u_Sampler = gl.getUniformLocation(program2, 'u_Sampler')
+      gl.uniform1i(u_Sampler, 0)
+      gl.clearColor(0.0, 0.0, 0.0, 1.0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+    }
+
+  </script>
+</body>
+
+</html>

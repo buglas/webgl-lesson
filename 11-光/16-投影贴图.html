@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>投影</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+
+    #canvas {
+      background-color: antiquewhite;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <!--在帧缓冲区绘制投影贴图 -->
+  <script id="vs1" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    uniform mat4 u_PvMatrix;
+    uniform mat4 u_ModelMatrix;
+    void main(){
+      gl_Position=u_PvMatrix*u_ModelMatrix*a_Position;
+    }
+  </script>
+  <script id="fs1" type="x-shader/x-fragment">
+    precision mediump float;
+    void main(){
+      gl_FragColor=vec4(vec3(gl_FragCoord.z),1.0);
+    }
+  </script>
+  <script type="module">
+    import { createProgram } from "/jsm/Utils.js";
+    import {
+      Matrix4, PerspectiveCamera, Vector3,
+    } from '/three/build/three.module.js';
+
+    const canvas = document.getElementById('canvas');
+    const ratio = window.innerWidth / window.innerHeight
+    canvas.width = window.innerWidth
+    canvas.height = window.innerHeight
+    const gl = canvas.getContext('webgl');
+
+    // 灯光
+    const light = new PerspectiveCamera(70, ratio, 0.1, 10.0)
+    light.position.set(0, 2, 0)
+    light.lookAt(0, 0, 0)
+    light.updateMatrixWorld(true)
+    const pvMatrixLight = light.projectionMatrix.clone()
+      .multiply(light.matrixWorldInverse)
+
+    // 相机
+    const camera = new PerspectiveCamera(45, ratio, 0.1, 10.0)
+    camera.position.set(0, 0.3, 0.9)
+    camera.lookAt(0, 0.0, 0.0)
+    camera.updateMatrixWorld(true)
+    const pvMatrix = camera.projectionMatrix.clone()
+      .multiply(camera.matrixWorldInverse)
+
+    // 三角形数据
+    const triangleVertice = new Float32Array([
+      -0.1, 0.1, -0.1,
+      0.1, 0.1, -0.1,
+      0.0, 0.1, 0.1
+    ])
+    // 地面数据
+    const floorVertice = new Float32Array([
+      -0.2, 0, 0.2,
+      0.2, 0, 0.2,
+      -0.2, 0, -0.2,
+      0.2, 0, -0.2,
+    ])
+
+    // 纹理尺寸
+    const width = 1024, height = 1024
+    // 纹理对象
+    let texture = null
+
+    /* 帧缓冲区内绘图 */
+    {
+      // 程序对象
+      const program = createProgram(
+        gl,
+        document.getElementById('vs1').innerText,
+        document.getElementById('fs1').innerText
+      )
+      gl.useProgram(program)
+      gl.enable(gl.DEPTH_TEST)
+
+      // 清理画布
+      gl.clearColor(0, 0, 0, 1.0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+
+      // 灯光的投影视图矩阵
+      const u_PvMatrixLight = gl.getUniformLocation(program, 'u_PvMatrix');
+      gl.uniformMatrix4fv(u_PvMatrixLight, false, pvMatrixLight.elements);
+
+      // 三角形的模型矩阵
+      const u_ModelMatrix = gl.getUniformLocation(program, 'u_ModelMatrix');
+      gl.uniformMatrix4fv(u_ModelMatrix, false, new Matrix4().elements);
+
+      // 绘制三角形
+      drawObj(program, triangleVertice, 3)
+
+      // 绘制平面
+      drawObj(program, floorVertice, 4)
+
+      //还原
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, canvas.width, canvas.height);
+    }
+
+    //绘制图形
+    function drawObj(program, vertice, count) {
+      const verticesBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, verticesBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, vertice, gl.STATIC_DRAW);
+      const attribute = gl.getAttribLocation(program, 'a_Position');
+      gl.vertexAttribPointer(attribute, 3, gl.FLOAT, false, 0, 0);
+      gl.enableVertexAttribArray(attribute);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, count);
+    }
+
+  </script>
+</body>
+
+</html>

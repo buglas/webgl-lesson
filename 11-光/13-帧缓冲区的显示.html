@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>帧缓冲区</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+
+    #canvas {
+      background-color: antiquewhite;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <!-- 帧缓冲区里的点 -->
+  <script id="vs1" type="x-shader/x-vertex">
+    void main(){
+      //点位
+      gl_Position=vec4(0,0,0,1);
+      //尺寸
+      gl_PointSize=100.0;
+    }
+  </script>
+  <script id="fs1" type="x-shader/x-fragment">
+    void main(){
+      gl_FragColor=vec4(1,1,0,1);
+    }
+  </script>
+  <!-- 纹理着色器 -->
+  <script id="vs2" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    attribute vec2 a_Pin;
+    varying vec2 v_Pin;
+    void main(){
+      gl_Position = a_Position;
+      v_Pin=a_Pin;
+    }
+  </script>
+  <script id="fs2" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform sampler2D u_Sampler;
+    varying vec2 v_Pin;
+    void main(){
+      gl_FragColor=texture2D(u_Sampler,v_Pin);
+    }
+  </script>
+  <script type="module">
+    import { createProgram } from "/jsm/Utils.js";
+
+    const canvas = document.querySelector("#canvas");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // 获取着色器文本
+    const vs1 = document.querySelector("#vs1").innerText;
+    const fs1 = document.querySelector("#fs1").innerText;
+
+    //三维画笔
+    const gl = canvas.getContext("webgl");
+
+    console.log(gl.getParameter(gl.VIEWPORT));
+
+    //建立程序对象
+    const program1 = createProgram(gl, vs1, fs1);
+    gl.useProgram(program1)
+
+    //纹理对象
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1)
+    gl.activeTexture(gl.TEXTURE0)
+    let texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(
+      gl.TEXTURE_2D,
+      gl.TEXTURE_MIN_FILTER,
+      gl.LINEAR
+    );
+    gl.texImage2D(
+      gl.TEXTURE_2D, 0, gl.RGBA, 256, 256,
+      0, gl.RGBA, gl.UNSIGNED_BYTE, null
+    );
+
+    //帧缓冲区
+    const framebuffer = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+    gl.framebufferTexture2D(
+      gl.FRAMEBUFFER,
+      gl.COLOR_ATTACHMENT0,
+      gl.TEXTURE_2D,
+      texture, 0
+    );
+
+    //设置渲染尺寸
+    gl.viewport(0, 0, 256, 256);
+
+
+    //声明颜色 rgba
+    gl.clearColor(0.4, 0.6, 0.9, 1.0);
+    //刷底色
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    //绘制顶点
+    gl.drawArrays(gl.POINTS, 0, 1);
+
+
+    //置空帧缓冲区
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+    //让VIEWPORT 的尺寸和canvas画布保持一致
+    gl.viewport(0, 0, canvas.width, canvas.height)
+
+    const vs2 = document.getElementById('vs2').innerText;
+    const fs2 = document.getElementById('fs2').innerText;
+    const program2 = createProgram(gl, vs2, fs2);
+    gl.useProgram(program2)
+
+    const source = new Float32Array([
+      -0.5, 0.5, 0, 1,
+      -0.5, -0.5, 0, 0,
+      0.5, 0.5, 1, 1,
+      0.5, -0.5, 1, 0
+    ])
+    const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, source, gl.STATIC_DRAW);
+    const a_Position = gl.getAttribLocation(program2, 'a_Position');
+    gl.vertexAttribPointer(a_Position, 2, gl.FLOAT, false, 16, 0);
+    gl.enableVertexAttribArray(a_Position);
+    const a_Pin = gl.getAttribLocation(program2, 'a_Pin');
+    gl.vertexAttribPointer(a_Pin, 2, gl.FLOAT, false, 16, 8);
+    gl.enableVertexAttribArray(a_Pin);
+
+    gl.bindTexture(gl.TEXTURE_2D, texture)
+    const u_Sampler = gl.getUniformLocation(program2, 'u_Sampler')
+    gl.uniform1i(u_Sampler, 0)
+
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+
+
+  </script>
+</body>
+
+</html>

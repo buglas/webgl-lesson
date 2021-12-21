@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>逐三角形着色</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <!-- 法线 -->
+  <script id="vl" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    uniform mat4 u_PvMatrix;
+    void main(){
+      gl_Position=u_PvMatrix*a_Position;
+    }
+  </script>
+  <script id="fl" type="x-shader/x-fragment">
+    void main(){
+      gl_FragColor=vec4(1.0);
+    }
+  </script>
+
+  <!-- Blinn-Phong -->
+  <script id="vs" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    attribute vec3 a_Normal;
+    uniform mat4 u_PvMatrix;
+    uniform mat4 u_ModelMatrix;
+    varying vec3 v_Normal;
+    varying vec3 v_Position;
+    void main(){
+      vec4 worldPos=u_ModelMatrix*a_Position;
+      gl_Position = u_PvMatrix*worldPos;
+      //v_Normal=a_Normal;
+      v_Normal=normalize(mat3(u_ModelMatrix)*a_Normal);
+      //v_Position=vec3(a_Position);
+      v_Position=vec3(worldPos);
+    }
+  </script>
+  <script id="fs" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform vec3 u_Kd;
+    uniform vec3 u_Ks;
+    uniform vec3 u_Ka;
+    uniform vec3 u_LightDir;
+    uniform vec3 u_Eye;
+    varying vec3 v_Normal;
+    varying vec3 v_Position;
+    void main(){
+      //视点看向当前着色点的视线
+      vec3 eyeDir=normalize(u_Eye-v_Position);
+      //角平分线
+      vec3 h=normalize(eyeDir+u_LightDir);
+
+      //漫反射
+      vec3 diffuse=u_Kd*max(0.0,dot(v_Normal,u_LightDir));
+
+      //镜面反射
+      vec3 specular=u_Ks*pow(
+        max(0.0,dot(v_Normal,h)),
+        64.0
+      );
+
+      //Blinn-Phong 反射
+      vec3 l=diffuse+specular+u_Ka;
+
+      gl_FragColor=vec4(l,1.0);
+    }
+  </script>
+  <script type="module">
+    import { createProgram, imgPromise } from '/jsm/Utils.js';
+    import {
+      Matrix4, PerspectiveCamera, Vector3,
+      SphereGeometry
+    } from 'https://unpkg.com/three/build/three.module.js';
+    import OrbitControls from './lv/OrbitControls.js'
+    import Mat from './lv/Mat.js'
+    import Geo from './lv/Geo.js'
+    import Obj3D from './lv/Obj3D.js'
+    import Scene from './lv/Scene.js'
+    import Sphere from './lv/Sphere.js'
+    import { flatShading } from './lv/ShadingFrequency.js'
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    let gl = canvas.getContext('webgl');
+    gl.clearColor(0, 0, 0, 1);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.enable(gl.DEPTH_TEST);
+
+
+    // 目标点
+    const target = new Vector3(5, 0, 0)
+    //视点
+    const eye = new Vector3(0, 0, 3)
+    const [fov, aspect, near, far] = [
+      45, canvas.width / canvas.height,
+      1, 20
+    ]
+    // 透视相机
+    const camera = new PerspectiveCamera(fov, aspect, near, far)
+    camera.position.copy(eye)
+    // 轨道控制器
+    const orbit = new OrbitControls({ camera, target, dom: canvas, })
+
+    // 阳光光线方向
+    const lightDir = new Vector3(0.5, 1, 1).normalize()
+    // 漫反射系数- 颜色
+    const u_Kd = [0.7, 0.7, 0.7]
+    // 镜面反射系数
+    const u_Ks = [0.2, 0.2, 0.2]
+    //环境反射系数
+    const u_Ka = [0.2, 0.2, 0.2]
+
+    // 球体
+    // const sphere = new SphereGeometry(0.5, 24, 24)
+    const sphere = new Sphere(0.5, 60, 60)
+    // const { vertices, normals, indexes } = sphere;
+    const vertices = sphere.getTriangles()
+    const normals = flatShading(sphere.vertices, sphere.indexes)
+
+
+    // 场景
+    const scene = new Scene({ gl })
+    //注册程序对象
+    scene.registerProgram(
+      'Blinn-Phong',
+      {
+        program: createProgram(
+          gl,
+          document.getElementById('vs').innerText,
+          document.getElementById('fs').innerText,
+        ),
+        attributeNames: ['a_Position', 'a_Normal'],
+        uniformNames: [
+          'u_PvMatrix', 'u_ModelMatrix', 'u_Kd', 'u_LightDir',
+          'u_Ks', 'u_Eye', 'u_Ka'
+        ]
+      }
+    )
+
+    const mat = new Mat({
+      program: 'Blinn-Phong',
+      data: {
+        u_PvMatrix: {
+          value: orbit.getPvMatrix().elements,
+          type: 'uniformMatrix4fv',
+        },
+        u_ModelMatrix: {
+          value: new Matrix4()
+            //.makeScale(1, 2, 1)
+            .setPosition(5, 0, 0)
+            .elements,
+          type: 'uniformMatrix4fv',
+        },
+        u_Kd: {
+          value: u_Kd,
+          type: 'uniform3fv'
+        },
+        u_LightDir: {
+          value: [...lightDir],
+          type: 'uniform3fv'
+        },
+        u_Ks: {
+          value: u_Ks,
+          type: 'uniform3fv'
+        },
+        u_Eye: {
+          value: [...camera.position],
+          type: 'uniform3fv'
+        },
+        u_Ka: {
+          value: [...u_Ka],
+          type: 'uniform3fv'
+        },
+
+      },
+    })
+    const geo = new Geo({
+      data: {
+        a_Position: {
+          array: vertices,
+          size: 3
+        },
+        a_Normal: {
+          array: normals,
+          size: 3
+        }
+      },
+      /* index: {
+        array: indexes
+      } */
+    })
+    const obj = new Obj3D({ geo, mat })
+    scene.add(obj)
+
+    // 法线辅助线
+    scene.registerProgram(
+      'line',
+      {
+        program: createProgram(
+          gl,
+          document.getElementById('vl').innerText,
+          document.getElementById('fl').innerText,
+        ),
+        attributeNames: ['a_Position'],
+        uniformNames: ['u_PvMatrix']
+      }
+    )
+    const matN = new Mat({
+      program: 'line',
+      data: {
+        u_PvMatrix: {
+          value: orbit.getPvMatrix().elements,
+          type: 'uniformMatrix4fv'
+        },
+      },
+      mode: 'LINES'
+    })
+    const geoN = new Geo({
+      data: {
+        a_Position: {
+          array: getNormalHelper(vertices, normals),
+          size: 3
+        }
+      }
+    })
+    const objN = new Obj3D({ mat: matN, geo: geoN })
+    // scene.add(objN)
+
+
+    scene.draw()
+
+    !(function ani() {
+      orbit.getPvMatrix()
+      scene.setUniform('u_Eye', {
+        value: [...camera.position]
+      })
+      scene.draw()
+      requestAnimationFrame(ani)
+    })()
+
+    // 建立一个获取法线辅助线的顶点数据的方法 (顶点集合,法线集合,长度)
+    function getNormalHelper(vertices, normals, length = 0.2) {
+      const normalVertices = []
+      for (let i = 0; i < normals.length; i += 3) {
+        // 模型的顶点点位
+        const p1 = new Vector3(
+          vertices[i], vertices[i + 1], vertices[i + 2],
+        )
+        // 将法线从模型顶点向外延伸
+        const p2 = new Vector3(
+          normals[i], normals[i + 1], normals[i + 2],
+        )
+          .setLength(length)
+          .add(p1)
+        normalVertices.push(...p1, ...p2)
+      }
+      return new Float32Array(normalVertices)
+    }
+
+    /* 取消右击菜单的显示 */
+    canvas.addEventListener('contextmenu', event => {
+      event.preventDefault()
+    })
+    /* 指针按下时，设置拖拽起始位，获取轨道控制器状态。 */
+    canvas.addEventListener('pointerdown', event => {
+      orbit.pointerdown(event)
+    })
+    /* 指针移动时，若控制器处于平移状态，平移相机；若控制器处于旋转状态，旋转相机。 */
+    canvas.addEventListener('pointermove', event => {
+      orbit.pointermove(event)
+    })
+    /* 指针抬起 */
+    canvas.addEventListener('pointerup', event => {
+      orbit.pointerup(event)
+    })
+    /* 滚轮事件 */
+    canvas.addEventListener('wheel', event => {
+      orbit.wheel(event)
+    })
+
+
+  </script>
+</body>
+
+</html>

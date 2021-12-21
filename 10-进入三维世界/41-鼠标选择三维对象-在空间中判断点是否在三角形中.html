@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>鼠标选择三维对象</title>
+</head>
+
+<body>
+  <script type="module">
+    import {
+      Matrix4, OrthographicCamera, Vector3, Vector2,
+      Plane, Ray
+    } from 'https://unpkg.com/three/build/three.module.js';
+
+    // 三角形ABC
+    const A = new Vector3(-6, 0, -4)
+    const B = new Vector3(0, 0, 4)
+    const C = new Vector3(6, 0, -4)
+    /* const A = new Vector3(-6, 6, -4)
+    const B = new Vector3(0, 6, 4)
+    const C = new Vector3(6, 6, -4) */
+    /* const A = new Vector3(-6, 9, -4)
+    const B = new Vector3(0, 9, 4)
+    const C = new Vector3(6, 9, -4) */
+
+    // 视点
+    const E = new Vector3(0, 12, 16)
+    // 鼠标点
+    // const P = new Vector3(0, 3, 4)
+    const P = new Vector3(0, 3, -4)
+
+    {
+      // 三角形ABC的法线
+      const AB = new Vector3().subVectors(B, A)
+      const BC = new Vector3().subVectors(C, B)
+      //法线-垂直于向量AB、BC的一条单位向量
+      const n = new Vector3().crossVectors(AB, BC).normalize()
+
+      // 射线方向
+      const v = new Vector3().subVectors(P, E).normalize()
+
+      // 交点M=((A-E)·n/v·n)*v+E
+      const M = v.clone().multiplyScalar(
+        A.clone().sub(E).dot(n) / v.clone().dot(n)
+      ).add(E)
+
+      // 三角形ABC
+      const triangle = [A, B, C]
+      //空间点是否在三角形中
+      function inTriangle(M, triangle) {
+        let bool = true
+        for (let i = 0; i < 3; i++) {
+          let j = (i + 1) % 3
+          const [a, b] = [triangle[i], triangle[j]]
+          const ma = a.clone().sub(M)
+          const ab = b.clone().sub(a)
+          // 垂线
+          const d = ma.clone().cross(ab)
+          // 实数
+          const len = d.dot(n)
+          if (len < 0) {
+            bool = false
+            break
+          }
+        }
+        return bool
+      }
+      const bool = inTriangle(M, triangle)
+      console.log(bool);
+      console.log('M', M);
+
+    }
+
+    {
+      const ray = new Ray(E).lookAt(P)
+      const M = new Vector3()
+      ray.intersectTriangle(
+        A, B, C,
+        true,
+        M
+      )
+      console.log('M-three', M);
+    }
+
+  </script>
+</body>
+
+</html>

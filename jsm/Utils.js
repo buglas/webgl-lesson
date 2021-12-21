@@ -69,14 +69,6 @@ function glToCssPos({ x, y }, { width, height }) {
   }
 }
 
-function glToCanvasPos({ x, y }, { width, height }) {
-  const [halfWidth, halfHeight] = [width / 2, height / 2];
-  return {
-    x: halfWidth + x * halfWidth,
-    y: halfHeight - y * halfHeight
-  }
-}
-
 //线性比例尺
 function ScaleLinear(ax, ay, bx, by) {
   const delta = {
@@ -97,8 +89,8 @@ function SinFn(a, Omega, phi) {
   }
 }
 
-/* GetIndexInGrid 
-  在由一维数组建立的栅格矩阵中，基于行列获取元素的索引位置 
+/* GetIndexInGrid
+  在由一维数组建立的栅格矩阵中，基于行列获取元素的索引位置
 */
 function GetIndexInGrid(w, size) {
   return function (x, y) {
@@ -143,7 +135,6 @@ export {
   createProgram,
   getMousePosInWebgl,
   glToCssPos,
-  glToCanvasPos,
   ScaleLinear,
   SinFn,
   GetIndexInGrid,

@@ -17,6 +17,7 @@
   <canvas id="canvas"></canvas>
   <script id="vertexShader" type="x-shader/x-vertex">
     attribute vec4 a_Position;
+    //视图矩阵
     uniform mat4 u_ViewMatrix;
     void main(){
       gl_Position = u_ViewMatrix*a_Position;
@@ -79,7 +80,7 @@
         verticeLib[i + 2] / 5,
       )
     })
-    const vertices = new Float32Array(z)
+    const vertices = new Float32Array(arr)
 
     const vertexBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
@@ -89,46 +90,41 @@
     gl.enableVertexAttribArray(a_Position);
 
     const u_ViewMatrix = gl.getUniformLocation(gl.program, 'u_ViewMatrix')
-    const matrix = lookAt(
-      new Vector3(-0.2, -0.2, 1),
+    const viewMatrix = getViewMatrix(
+      new Vector3(0.1, 0.2, 0.5),
       new Vector3(0, 0, 0),
       new Vector3(0, 1, 0)
     )
-    gl.uniformMatrix4fv(u_ViewMatrix, false, matrix)
+    gl.uniformMatrix4fv(u_ViewMatrix, false, viewMatrix)
 
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.drawArrays(gl.LINES, 0, indices.length);
 
 
-    //视图矩阵
-    function lookAt(e, t, u) {
-      //目标点到视点的向量
-      const d = new Vector3().subVectors(e, t)
-      d.normalize()
-      //d和上方向的垂线
-      const a = new Vector3().crossVectors(u, d)
-      a.normalize()
-      //d和a的垂线
-      const b = new Vector3().crossVectors(d, a)
-      b.normalize()
-      //c 基于d取反
-      // const c = new Vector3(d.x, d.y, d.z)
-      const c = d
-      /* return [
-        a.x, b.x, c.x, 0,
-        a.y, b.y, c.y, 0,
-        a.z, b.z, c.z, 0,
+    function getViewMatrix(e, t, u) {
+      //基向量c，视线
+      const c = new Vector3().subVectors(e, t).normalize()
+      //基向量a，视线和上方向的垂线
+      const a = new Vector3().crossVectors(u, c).normalize()
+      //基向量b，修正上方向
+      const b = new Vector3().crossVectors(c, a).normalize()
+      //正交旋转矩阵
+      const mr = new Matrix4().set(
+        ...a, 0,
+        ...b, 0,
+        -c.x, -c.y, -c.z, 0,
         0, 0, 0, 1
-      ] */
-      return [
-        a.x, a.y, a.z, 0,
-        b.x, b.y, b.z, 0,
-        c.x, c.y, c.z, 0,
+      )
+      //位移矩阵
+      const mt = new Matrix4().set(
+        1, 0, 0, -e.x,
+        0, 1, 0, -e.y,
+        0, 0, 1, -e.z,
         0, 0, 0, 1
-      ]
+      )
+      return mr.multiply(mt).elements
     }
-
 
 
   </script>

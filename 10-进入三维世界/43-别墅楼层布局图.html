@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>别墅楼层布局图</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <script id="vs" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    attribute vec2 a_Pin;
+    uniform mat4 u_PvMatrix;
+    uniform mat4 u_ModelMatrix;
+    varying vec2 v_Pin;
+    void main(){
+      gl_Position = u_PvMatrix*u_ModelMatrix*a_Position;
+      v_Pin=a_Pin;
+    }
+  </script>
+  <script id="fs" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform sampler2D u_Sampler;
+    varying vec2 v_Pin;
+    void main(){
+      gl_FragColor=texture2D(u_Sampler,v_Pin);
+    }
+  </script>
+  <script type="module">
+    import { createProgram, imgPromise } from '/jsm/Utils.js';
+    import { Matrix4, PerspectiveCamera, Vector3 } from 'https://unpkg.com/three/build/three.module.js';
+    import OrbitControls from './jsm/OrbitControls.js'
+    import Mat from './lv/Mat.js'
+    import Geo from './lv/Geo.js'
+    import Obj3D from './lv/Obj3D.js'
+    import Scene from './lv/Scene.js'
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    let gl = canvas.getContext('webgl');
+    gl.clearColor(0, 0, 0, 1);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.enable(gl.DEPTH_TEST);
+
+    //建立加载图片的promise集合，等所有图片都加载成功后再渲染
+    const promises = [-2, -1, 1, 2, 3, 4].map(ele => {
+      const image = new Image()
+      image.src = `./images/${ele}.png`
+      return imgPromise(image)
+    })
+
+    // 层高
+    const fh = 0.5
+
+    //视点相对于目标点的位置
+    const dist = new Vector3(-0.5, 2.8, 1.5)
+    // 目标点
+    const target = new Vector3(0, 2, 0.6)
+    //视点
+    const eye = target.clone().add(dist)
+    const [fov, aspect, near, far] = [
+      45, canvas.width / canvas.height,
+      1, 20
+    ]
+    // 透视相机
+    const camera = new PerspectiveCamera(fov, aspect, near, far)
+    camera.position.copy(eye)
+    // 轨道控制器
+    const orbit = new OrbitControls({ camera, target, dom: canvas, })
+
+    // 场景
+    const scene = new Scene({ gl })
+    //注册程序对象
+    scene.registerProgram(
+      'img',
+      {
+        program: createProgram(
+          gl,
+          document.getElementById('vs').innerText,
+          document.getElementById('fs').innerText,
+        ),
+        attributeNames: ['a_Position', 'a_Pin'],
+        uniformNames: ['u_PvMatrix', 'u_ModelMatrix', 'u_Sampler']
+      }
+    )
+
+    //当所有图片都加载成功后再绘图
+    Promise.all(promises).then(imgs => {
+      imgs.forEach((img, ind) => scene.add(crtObj(img, ind)))
+      render()
+    })
+    // 连续渲染
+    function render() {
+      scene.setUniform('u_PvMatrix', {
+        value: orbit.getPvMatrix().elements
+      })
+      scene.draw()
+      requestAnimationFrame(render)
+    }
+
+    // 基于图片和图片索引建立三维对象
+    function crtObj(image, ind) {
+      const y = fh * ind
+      const modelMatrix = new Matrix4()
+      modelMatrix.elements[13] = y
+      const mat = new Mat({
+        program: 'img',
+        data: {
+          u_PvMatrix: {
+            value: orbit.getPvMatrix().elements,
+            type: 'uniformMatrix4fv',
+          },
+          u_ModelMatrix: {
+            value: modelMatrix.elements,
+            type: 'uniformMatrix4fv',
+          },
+        },
+        maps: {
+          u_Sampler: {
+            image,
+            format: gl.RGBA
+          }
+        },
+        mode: 'TRIANGLE_STRIP'
+      })
+      const geo = new Geo({
+        data: {
+          a_Position: {
+            array: new Float32Array([
+              -0.5, 0, 0.5,
+              -0.5, 0, -0.5,
+              0.5, 0, 0.5,
+              0.5, 0, -0.5,
+            ]),
+            size: 3
+          },
+          a_Pin: {
+            array: new Float32Array([
+              0, 0,
+              0, 1,
+              1, 0,
+              1, 1,
+            ]),
+            size: 2
+          }
+        }
+      })
+      return new Obj3D({ geo, mat })
+    }
+
+    /* 取消右击菜单的显示 */
+    canvas.addEventListener('contextmenu', event => {
+      event.preventDefault()
+    })
+    /* 指针按下时，设置拖拽起始位，获取轨道控制器状态。 */
+    canvas.addEventListener('pointerdown', event => {
+      orbit.pointerdown(event)
+    })
+    /* 指针移动时，若控制器处于平移状态，平移相机；若控制器处于旋转状态，旋转相机。 */
+    canvas.addEventListener('pointermove', event => {
+      orbit.pointermove(event)
+    })
+    /* 指针抬起 */
+    canvas.addEventListener('pointerup', event => {
+      orbit.pointerup(event)
+    })
+    /* 滚轮事件 */
+    canvas.addEventListener('wheel', event => {
+      orbit.wheel(event)
+    })
+
+
+  </script>
+</body>
+
+</html>

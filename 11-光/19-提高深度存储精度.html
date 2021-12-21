@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>投影</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+
+    #canvas {
+      background-color: antiquewhite;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <!--在帧缓冲区绘制投影贴图 -->
+  <script id="vs1" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    uniform mat4 u_PvMatrix;
+    uniform mat4 u_ModelMatrix;
+    void main(){
+      gl_Position=u_PvMatrix*u_ModelMatrix*a_Position;
+    }
+  </script>
+  <script id="fs1" type="x-shader/x-fragment">
+    precision mediump float;
+    void main(){
+      const vec4 bitShift = vec4(
+        1.0, 
+        256.0, 
+        256.0 * 256.0, 
+        256.0 * 256.0 * 256.0
+      );
+      const vec4 bitMask = vec4(vec3(1.0/256.0), 0.0);
+      vec4 depth = fract(gl_FragCoord.z * bitShift);
+      depth -= depth.gbaa * bitMask;
+      gl_FragColor=depth;
+    }
+  </script>
+  <!-- 在canvas 画布上绘图 -->
+  <script id="vs2" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    uniform mat4 u_PvMatrix;
+    uniform mat4 u_ModelMatrix;
+    
+    uniform mat4 u_PvMatrixLight;
+    varying vec4 v_ClipPosLight;
+    void main(){
+      vec4 worldPos=u_ModelMatrix*a_Position;
+      gl_Position=u_PvMatrix*worldPos;
+      v_ClipPosLight=u_PvMatrixLight*worldPos;
+    }
+  </script>
+  <script id="fs2" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform sampler2D u_ShadowMap;
+    varying vec4 v_ClipPosLight;
+    bool isInShadow(){
+      vec3 fragPos=(v_ClipPosLight.xyz/v_ClipPosLight.w)/2.0 + 0.5;
+      vec4 shadowFrag = texture2D(u_ShadowMap, fragPos.xy);
+      const vec4 bitShift = vec4(
+        1.0, 
+        1.0/256.0, 
+        1.0/(256.0*256.0), 
+        1.0/(256.0*256.0*256.0)
+      );
+      float depth = dot(shadowFrag, bitShift);
+      return fragPos.z>depth+1.0/(256.0*4.0);
+    }
+    void main(){
+      float darkness=isInShadow()?0.7:1.0;
+      gl_FragColor=vec4(vec3(darkness),1.0);
+    }
+  </script>
+  <script type="module">
+    import { createProgram } from "/jsm/Utils.js";
+    import {
+      Matrix4, PerspectiveCamera, Vector3,
+    } from '/three/build/three.module.js';
+
+    const canvas = document.getElementById('canvas');
+    const ratio = window.innerWidth / window.innerHeight
+    canvas.width = window.innerWidth
+    canvas.height = window.innerHeight
+    const gl = canvas.getContext('webgl');
+
+    // 灯光
+    const light = new PerspectiveCamera(70, ratio, 0.1, 10.0)
+    light.position.set(0, 2, 0)
+    light.lookAt(0, 0, 0)
+    light.updateMatrixWorld(true)
+    const pvMatrixLight = light.projectionMatrix.clone()
+      .multiply(light.matrixWorldInverse)
+
+    // 相机
+    const camera = new PerspectiveCamera(45, ratio, 0.1, 10.0)
+    camera.position.set(0, 0.3, 0.9)
+    camera.lookAt(0, 0.0, 0.0)
+    camera.updateMatrixWorld(true)
+    const pvMatrix = camera.projectionMatrix.clone()
+      .multiply(camera.matrixWorldInverse)
+
+    // 三角形数据
+    const triangleVertice = new Float32Array([
+      -0.1, 0.1, -0.1,
+      0.1, 0.1, -0.1,
+      0.0, 0.1, 0.1
+    ])
+    // 地面数据
+    const floorVertice = new Float32Array([
+      -0.2, 0, 0.2,
+      0.2, 0, 0.2,
+      -0.2, 0, -0.2,
+      0.2, 0, -0.2,
+    ])
+
+    // 纹理尺寸
+    const width = 1024, height = 1024
+    // 纹理对象
+    let texture = null
+
+    /* 帧缓冲区内绘图 */
+    {
+      // 程序对象
+      const program = createProgram(
+        gl,
+        document.getElementById('vs1').innerText,
+        document.getElementById('fs1').innerText
+      )
+      gl.useProgram(program)
+      gl.enable(gl.DEPTH_TEST)
+
+      // 纹理对象
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1)
+      gl.activeTexture(gl.TEXTURE0)
+      texture = gl.createTexture()
+      gl.bindTexture(gl.TEXTURE_2D, texture)
+      gl.texParameteri(
+        gl.TEXTURE_2D,
+        gl.TEXTURE_MIN_FILTER,
+        gl.LINEAR
+      );
+      gl.texImage2D(
+        gl.TEXTURE_2D, 0, gl.RGBA,
+        width, height,
+        0, gl.RGBA, gl.UNSIGNED_BYTE, null
+      );
+
+      // 帧缓冲区
+      const framebuffer = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+      gl.framebufferTexture2D(
+        gl.FRAMEBUFFER,
+        gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D,
+        texture, 0
+      );
+
+      // 渲染缓冲区，存储深度数据
+      const depthbuffer = gl.createRenderbuffer();
+      gl.bindRenderbuffer(gl.RENDERBUFFER, depthbuffer);
+      gl.renderbufferStorage(
+        gl.RENDERBUFFER, gl.DEPTH_COMPONENT16,
+        width, height
+      );
+      gl.framebufferRenderbuffer(
+        gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT,
+        gl.RENDERBUFFER, depthbuffer
+      );
+
+      // 视口尺寸
+      gl.viewport(0, 0, width, height);
+
+      // 清理画布
+      gl.clearColor(0, 0, 0, 1.0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+
+      // 灯光的投影视图矩阵
+      const u_PvMatrixLight = gl.getUniformLocation(program, 'u_PvMatrix');
+      gl.uniformMatrix4fv(u_PvMatrixLight, false, pvMatrixLight.elements);
+
+      // 三角形的模型矩阵
+      const u_ModelMatrix = gl.getUniformLocation(program, 'u_ModelMatrix');
+      gl.uniformMatrix4fv(u_ModelMatrix, false, new Matrix4().elements);
+
+      // 绘制三角形
+      drawObj(program, triangleVertice, 3)
+
+      // 绘制平面
+      drawObj(program, floorVertice, 4)
+
+      //还原
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, canvas.width, canvas.height);
+    }
+
+    // 在canvas 画布上绘图
+    {
+      // 程序对象
+      const program = createProgram(
+        gl,
+        document.getElementById('vs2').innerText,
+        document.getElementById('fs2').innerText
+      );
+      gl.useProgram(program)
+      gl.enable(gl.DEPTH_TEST);
+
+      // 清理画布
+      gl.clearColor(0, 0, 0, 1.0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+
+      // 纹理
+      gl.bindTexture(gl.TEXTURE_2D, texture)
+      const u_Sampler = gl.getUniformLocation(program, 'u_ShadowMap')
+      gl.uniform1i(u_Sampler, 0)
+
+      //相机的投影视图矩阵
+      const u_PvMatrix = gl.getUniformLocation(program, 'u_PvMatrix');
+      gl.uniformMatrix4fv(u_PvMatrix, false, pvMatrix.elements);
+
+      //灯光的投影视图矩阵
+      const u_PvMatrixLight = gl.getUniformLocation(program, 'u_PvMatrixLight');
+      gl.uniformMatrix4fv(u_PvMatrixLight, false, pvMatrixLight.elements);
+
+      // 三角形的模型矩阵
+      const u_ModelMatrix = gl.getUniformLocation(program, 'u_ModelMatrix');
+      gl.uniformMatrix4fv(u_ModelMatrix, false, new Matrix4().elements);
+
+      // 绘制三角形
+      drawObj(program, triangleVertice, 3)
+
+      // 绘制平面
+      drawObj(program, floorVertice, 4)
+    }
+
+    //绘制图形
+    function drawObj(program, vertice, count) {
+      const verticesBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, verticesBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, vertice, gl.STATIC_DRAW);
+      const attribute = gl.getAttribLocation(program, 'a_Position');
+      gl.vertexAttribPointer(attribute, 3, gl.FLOAT, false, 0, 0);
+      gl.enableVertexAttribArray(attribute);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, count);
+    }
+
+  </script>
+</body>
+
+</html>

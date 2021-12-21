@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>深度测试</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+
+    #canvas {
+      background-color: antiquewhite;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <!-- 帧缓冲区里的点 -->
+  <script id="vs1" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    varying float v_Z;
+    void main(){
+      //点位
+      gl_Position=a_Position;
+      //尺寸
+      gl_PointSize=200.0;
+      v_Z=a_Position.z;
+    }
+  </script>
+  <script id="fs1" type="x-shader/x-fragment">
+    precision mediump float;
+    varying float v_Z;
+    void main(){
+      gl_FragColor=vec4(vec3(v_Z),1);
+    }
+  </script>
+  <!-- 纹理着色器 -->
+  <script id="vs2" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    attribute vec2 a_Pin;
+    varying vec2 v_Pin;
+    void main(){
+      gl_Position = a_Position;
+      v_Pin=a_Pin;
+    }
+  </script>
+  <script id="fs2" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform sampler2D u_Sampler;
+    varying vec2 v_Pin;
+    void main(){
+      gl_FragColor=texture2D(u_Sampler,v_Pin);
+    }
+  </script>
+  <script type="module">
+    import { createProgram } from "/jsm/Utils.js";
+
+    const canvas = document.querySelector("#canvas");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // 获取着色器文本
+    const vs1 = document.querySelector("#vs1").innerText;
+    const fs1 = document.querySelector("#fs1").innerText;
+
+    //三维画笔
+    const gl = canvas.getContext("webgl");
+
+    //深度测试
+    gl.enable(gl.DEPTH_TEST)
+
+    //建立程序对象
+    const program1 = createProgram(gl, vs1, fs1);
+    gl.useProgram(program1)
+
+    const source = new Float32Array([
+      -0.1, 0.1, 0,
+      0.1, -0.1, 0.9,
+    ])
+    const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, source, gl.STATIC_DRAW);
+    const a_Position = gl.getAttribLocation(program1, 'a_Position');
+    gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(a_Position);
+
+
+    //声明颜色 rgba
+    gl.clearColor(0.4, 0.6, 0.9, 1.0);
+    //刷底色
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    //绘制顶点
+    gl.drawArrays(gl.POINTS, 0, 2);
+  </script>
+</body>
+
+</html>
