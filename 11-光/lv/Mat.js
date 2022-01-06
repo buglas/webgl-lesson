@@ -10,7 +10,9 @@ export default class Mat{
   }
   init(gl){
     Object.values(this.maps).forEach((map, ind) => {
-      map.texture = gl.createTexture()
+      if (!map.texture) {
+        map.texture = gl.createTexture()
+      }
       this.updateMap(gl,map,ind)
     })
   }
@@ -28,7 +30,7 @@ export default class Mat{
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1)
     gl.activeTexture(gl[`TEXTURE${ind}`])
     gl.bindTexture(gl.TEXTURE_2D, texture)
-    gl.texImage2D(
+    image&&gl.texImage2D(
         gl.TEXTURE_2D,
         0,
         format,

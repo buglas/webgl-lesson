@@ -2,7 +2,11 @@ const defAttr = () => ({
   gl:null,
   children: new Set(),
   programs: new Map(),
-  children2Draw:new Map()
+  children2Draw: new Map(),
+  //背景色
+  backgroundColor: [0, 0, 0, 1],
+  //深度测试
+  depthTest:true,
 })
 export default class Scene{
   constructor(attr){
@@ -61,7 +65,9 @@ export default class Scene{
     })
   }
   draw() {
-    const {gl,children2Draw,programs}=this
+    const {gl,children2Draw,programs,backgroundColor,depthTest}=this
+    gl.clearColor(...backgroundColor)
+    depthTest?gl.enable(gl.DEPTH_TEST):gl.disable(gl.DEPTH_TEST)
     gl.clear(gl.COLOR_BUFFER_BIT)
     for (let [key, objs] of children2Draw.entries()) {
       const { program, attributes, uniforms } = programs.get(key)
