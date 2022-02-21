@@ -48,9 +48,8 @@ function getGouraudNormal(ind,vertices,indexes,type) {
     findTriangles(ind, vertices, indexes, n => {
       normal.add(n.normalize())
     })
-    normal.normalize()
   }
-  return normal;
+  return normal.normalize();
 }
 // 寻找与顶点相邻的所有三角形
 function findTriangles(ind,vertices,indexes,fn) {

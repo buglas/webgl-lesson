@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>VR</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden
+    }
+
+    .mark {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      top: 0;
+      left: 0;
+      color: #fff;
+      background-color: rgba(0, 0, 0, 0.6);
+      padding: 6px 12px;
+      border-radius: 3px;
+      user-select: none;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="marks"></div>
+
+  <script type="module">
+    import {
+      Matrix4, PerspectiveCamera, Vector3
+    } from 'https://unpkg.com/three/build/three.module.js';
+    import OrbitControls from './lv/OrbitControls.js'
+    import VRFrame from './lv/VRFrame.js';
+    import VRPlane from './lv/VRPlane.js';
+    import Track from '/jsm/Track.js';
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    let gl = canvas.getContext('webgl');
+    gl.enable(gl.BLEND)
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+
+
+    // 目标点
+    const target = new Vector3()
+    const [fov, aspect, near, far] = [
+      60, canvas.width / canvas.height,
+      0.1, 5
+    ]
+    // 透视相机
+    const camera = new PerspectiveCamera(fov, aspect, near, far)
+    // 轨道控制器
+    const orbit = new OrbitControls({
+      camera,
+      target,
+      dom: canvas,
+      enablePan: false,
+      maxZoom: 15,
+      minZoom: 0.4
+    })
+
+    //投影视图矩阵
+    const pvMatrix = orbit.getPvMatrix()
+
+    //标记
+    const marks = document.querySelector('#marks')
+
+
+    // 场景
+    const scene = new VRPlane({ gl })
+    // 帧缓冲区对象
+    const vrNew = new VRFrame({ gl, orbit })
+    const vrOld = new VRFrame({ gl, orbit })
+    scene.mat.setMap('u_SampOld', {
+      texture: vrOld.texture
+    })
+
+
+    //vr数据
+    let data = null
+    //当前vr数据
+    let curVr = null
+    //请求vr数据
+    fetch('./data/vr.json')
+      .then(res => res.json())
+      .then(dt => {
+        data = dt
+        curVr = getVrById(1)
+        //更新vr
+        updateVr()
+        //渲染
+        render()
+      })
+
+    //根据vr的id从vr集合里面获取相应的vr数据
+    function getVrById(id) {
+      for (let i = 0; i < data.length; i++) {
+        if (id === data[i].id) {
+          return data[i]
+        }
+      }
+    }
+
+    // 是否制作补间动画
+    let tweenable = false
+    // 补间数据
+    const aniDt = { ratio: 0 }
+    // 时间轨
+    const track = new Track(aniDt)
+    track.timeLen = 1000
+    track.keyMap = new Map([
+      ['ratio', [[0, 0], [1000, 1]]]
+    ])
+    track.onEnd = () => {
+      tweenable = false
+    }
+
+    //暂存当前VR图片
+    let tempImg = null
+    //根据当前vr数据更新vr
+    function updateVr() {
+      const image = new Image()
+      image.src = curVr.imgSrc
+      image.onload = () => {
+        //开启补间动画
+        tweenable = true
+        //时间轨的起始时间
+        track.start = new Date()
+
+        if (tempImg) {
+          //设置旧Vr图片
+          vrOld.mat.setMap('u_Sampler', { image: tempImg })
+          vrOld.draw()
+          // 把旧VR的纹理对象传给u_SampOld
+          scene.mat.setMap('u_SampOld', {
+            texture: vrOld.texture
+          })
+        }
+
+        //暂存当前图片
+        tempImg = image
+        //设置新VR的图片
+        vrNew.mat.setMap('u_Sampler', { image })
+
+        //更新相机视点
+        camera.position.set(...curVr.eye)
+        orbit.updateCamera()
+        orbit.resetSpherical()
+        //显示标记点
+        showMark()
+      }
+    }
+
+    // 显示当前vr里的标记点
+    function showMark() {
+      curVr.marks.forEach(ele => {
+        const div = document.createElement('div')
+        div.className = 'mark'
+        div.innerText = ele.name
+        div.setAttribute('data-link', ele.link)
+        marks.append(div)
+      })
+    }
+
+    //更新标记点的canvas坐标位
+    function updateMarkCp() {
+      if (!marks.children.length) { return }
+      const { position } = camera
+      const EO = target.clone().sub(position)
+      const [halfW, halfH] = [canvas.width / 2, canvas.height / 2]
+      curVr.marks.forEach((ele, ind) => {
+        const markWp = new Vector3(...ele.pos)
+        const mark = marks.children[ind]
+        const dot = markWp.clone().sub(position).dot(EO)
+        mark.style.display = dot > 0 ? 'block' : 'none'
+        const { x, y } = markWp.applyMatrix4(pvMatrix)
+        mark.style.left = `${(x + 1) * halfW}px`
+        mark.style.top = `${(-y + 1) * halfH}px`
+      })
+    }
+
+    function render() {
+      if (tweenable) {
+        //更新时间轨的时间
+        track.update(new Date())
+        // 更新场景对象的插值数据
+        scene.mat.setData('u_Ratio', {
+          value: aniDt.ratio
+        })
+      }
+      // 更新投影视图矩阵
+      orbit.getPvMatrix()
+
+      // 新VR渲染
+      vrNew.draw()
+      // 更新场景对象的u_SampNew
+      scene.mat.setMap('u_SampNew', {
+        texture: vrNew.texture
+      })
+      // 场景渲染
+      scene.draw()
+      //更新标记点的canvas坐标
+      updateMarkCp()
+      requestAnimationFrame(render)
+    }
+
+    /* 点击标记点容器 */
+    marks.addEventListener('click', ({ target }) => {
+      if (target.className !== 'mark') { return }
+      marks.innerHTML = ''
+      curVr = getVrById(parseInt(target.getAttribute('data-link')))
+      updateVr()
+    })
+
+    /* 取消右击菜单的显示 */
+    canvas.addEventListener('contextmenu', event => {
+      event.preventDefault()
+    })
+    /* 指针按下时，设置拖拽起始位，获取轨道控制器状态。 */
+    canvas.addEventListener('pointerdown', event => {
+      orbit.pointerdown(event)
+    })
+    /* 指针移动时，若控制器处于平移状态，平移相机；若控制器处于旋转状态，旋转相机。 */
+    window.addEventListener('pointermove', event => {
+      orbit.pointermove(event)
+    })
+    /* 指针抬起 */
+    canvas.addEventListener('pointerup', event => {
+      orbit.pointerup(event)
+    })
+    /* 滚轮事件 */
+    canvas.addEventListener('wheel', event => {
+      orbit.wheel(event, 'OrthographicCamera')
+    })
+
+
+  </script>
+</body>
+
+</html>

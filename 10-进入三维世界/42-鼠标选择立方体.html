@@ -251,7 +251,6 @@
       ).applyMatrix4(modelMatrix)
     }
 
-
     // 获取鼠标世界位
     function worldPos({ clientX, clientY }) {
       const [hw, hh] = [canvas.width / 2, canvas.height / 2]
@@ -292,6 +291,7 @@
       scene.draw()
       requestAnimationFrame(ani)
     })()
+
 
   </script>
 </body>

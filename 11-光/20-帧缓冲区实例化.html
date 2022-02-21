@@ -160,8 +160,7 @@
   <script type="module">
     import { createProgram, imgPromise } from '/jsm/Utils.js';
     import {
-      Matrix4, PerspectiveCamera, Vector3,
-      SphereGeometry
+      Matrix4, PerspectiveCamera, Vector3, SphereGeometry
     } from 'https://unpkg.com/three/build/three.module.js';
     import OrbitControls from './lv/OrbitControls.js'
     import Mat from './lv/Mat.js'
@@ -332,6 +331,7 @@
         ]
       }
     )
+
     // 球体
     const matSphere = new Mat({
       program: 'Blinn-Phong',

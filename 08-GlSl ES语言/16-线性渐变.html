@@ -41,10 +41,10 @@
     vec2 normal=normalize(se);
 
     void main(){
-        vec2 sf=vec2(gl_FragCoord)-u_Start;
-        float fsLen=clamp(dot(sf,normal),0.0,seLen);
-        float ratio=fsLen/seLen;
-        gl_FragColor=u_Color0+c01*ratio;
+      vec2 sf=vec2(gl_FragCoord)-u_Start;
+      float fsLen=clamp(dot(sf,normal),0.0,seLen);
+      float ratio=fsLen/seLen;
+      gl_FragColor=u_Color0+c01*ratio;
     }
   </script>
   <script type="module">

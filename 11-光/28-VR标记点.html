@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>VR</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden
+    }
+
+    #mark {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      top: 0;
+      left: 0;
+      color: #fff;
+      background-color: rgba(0, 0, 0, 0.6);
+      padding: 6px 12px;
+      border-radius: 3px;
+      user-select: none;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="mark">标记点</div>
+  <script id="vs" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    attribute vec2 a_Pin;
+    uniform mat4 u_PvMatrix;
+    uniform mat4 u_ModelMatrix;
+    varying vec2 v_Pin;
+    void main(){
+      gl_Position=u_PvMatrix*u_ModelMatrix*a_Position;
+      v_Pin=a_Pin;
+    }
+  </script>
+  <script id="fs" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform sampler2D u_Sampler;
+    varying vec2 v_Pin;
+    void main(){
+      gl_FragColor=texture2D(u_Sampler,v_Pin);
+    }
+  </script>
+  <script type="module">
+    import { createProgram, worldPos } from "/jsm/Utils.js";
+    import {
+      Matrix4, PerspectiveCamera, Vector3
+    } from 'https://unpkg.com/three/build/three.module.js';
+    import OrbitControls from './lv/OrbitControls.js'
+    import Mat from './lv/Mat.js'
+    import Geo from './lv/Geo.js'
+    import Obj3D from './lv/Obj3D.js'
+    import Scene from './lv/Scene.js'
+    import Earth from './lv/Earth.js'
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    let gl = canvas.getContext('webgl');
+
+    // 球体
+    const earth = new Earth(0.5, 64, 32)
+
+    // 目标点
+    const target = new Vector3()
+    //视点
+    const eye = new Vector3(0.15, 0, 0)
+    const [fov, aspect, near, far] = [
+      60, canvas.width / canvas.height,
+      0.1, 5
+    ]
+    // 透视相机
+    const camera = new PerspectiveCamera(fov, aspect, near, far)
+    camera.position.copy(eye)
+    // 轨道控制器
+    const orbit = new OrbitControls({
+      camera,
+      target,
+      dom: canvas,
+      enablePan: false,
+      maxZoom: 15,
+      minZoom: 0.4
+    })
+
+    //投影视图矩阵
+    const pvMatrix = orbit.getPvMatrix()
+
+    //标记
+    const mark = document.querySelector('#mark')
+    //标记点的世界位
+    let markWp = null
+
+    // 场景
+    const scene = new Scene({ gl })
+    //注册程序对象
+    scene.registerProgram(
+      'map',
+      {
+        program: createProgram(
+          gl,
+          document.getElementById('vs').innerText,
+          document.getElementById('fs').innerText,
+        ),
+        attributeNames: ['a_Position', 'a_Pin'],
+        uniformNames: ['u_PvMatrix', 'u_ModelMatrix', 'u_Sampler']
+      }
+    )
+
+    //地球
+    const matEarth = new Mat({
+      program: 'map',
+      data: {
+        u_PvMatrix: {
+          value: orbit.getPvMatrix().elements,
+          type: 'uniformMatrix4fv',
+        },
+        u_ModelMatrix: {
+          value: new Matrix4().elements,
+          type: 'uniformMatrix4fv',
+        },
+      },
+    })
+    const geoEarth = new Geo({
+      data: {
+        a_Position: {
+          array: earth.vertices,
+          size: 3
+        },
+        a_Pin: {
+          array: earth.uv,
+          size: 2
+        }
+      },
+      index: {
+        array: earth.indexes
+      }
+    })
+
+    //加载图片
+    const image = new Image()
+    image.src = './images/room.jpg'
+    image.onload = function () {
+      matEarth.maps.u_Sampler = { image }
+      scene.add(new Obj3D({
+        geo: geoEarth,
+        mat: matEarth
+      }))
+      render()
+    }
+
+    function render() {
+      orbit.getPvMatrix()
+      scene.draw()
+      requestAnimationFrame(render)
+    }
+
+    /* 双击canvas画布 */
+    canvas.addEventListener('dblclick', event => {
+      addMark(event)
+    })
+
+    function addMark() {
+      //鼠标点的世界坐标
+      const A = worldPos(event, canvas, pvMatrix)
+      //获取标记点的世界坐标
+      markWp = getMarkWp(camera.position, A, target, earth.r)
+      //设置标记点的canvas坐标位
+      setMarkCp(event.clientX, event.clientY)
+    }
+
+    /* 获取射线和球体的交点
+      E 射线起点-视点
+      A 射线目标点
+      O 球心
+      r 半径
+    */
+    function getMarkWp(E, A, O, r) {
+      const v = A.clone().sub(E).normalize()
+      const OE = E.clone().sub(O)
+      const b = v.clone().multiplyScalar(2).dot(OE)
+      const c = OE.clone().dot(OE) - r * r
+      const lambda = (-b + Math.sqrt(b * b - 4 * c)) / 2
+      return v.clone().multiplyScalar(lambda).add(OE)
+    }
+
+    //设置标记点的canvas坐标位
+    function setMarkCp(x, y) {
+      mark.style.left = `${x}px`
+      mark.style.top = `${y}px`
+    }
+
+    //更新标记点的canvas坐标位
+    function updateMarkCp() {
+      if (!markWp) { return }
+
+      //判断标记点在相机的正面还是背面
+      const { position } = camera
+      const dot = markWp.clone().sub(position).dot(
+        target.clone().sub(position)
+      )
+      mark.style.display = dot > 0 ? 'block' : 'none'
+
+      // 将标记点的世界坐标转裁剪坐标
+      const { x, y } = markWp.clone().applyMatrix4(pvMatrix)
+      // 将标记点的裁剪坐标转canvas坐标
+      setMarkCp(
+        (x + 1) * canvas.width / 2,
+        (-y + 1) * canvas.height / 2
+      )
+    }
+
+    /* 取消右击菜单的显示 */
+    canvas.addEventListener('contextmenu', event => {
+      event.preventDefault()
+    })
+    /* 指针按下时，设置拖拽起始位，获取轨道控制器状态。 */
+    canvas.addEventListener('pointerdown', event => {
+      orbit.pointerdown(event)
+    })
+    /* 指针移动时，若控制器处于平移状态，平移相机；若控制器处于旋转状态，旋转相机。 */
+    canvas.addEventListener('pointermove', event => {
+      orbit.pointermove(event)
+      updateMarkCp()
+    })
+    /* 指针抬起 */
+    canvas.addEventListener('pointerup', event => {
+      orbit.pointerup(event)
+    })
+    /* 滚轮事件 */
+    canvas.addEventListener('wheel', event => {
+      orbit.wheel(event, 'OrthographicCamera')
+      updateMarkCp()
+    })
+
+
+  </script>
+</body>
+
+</html>

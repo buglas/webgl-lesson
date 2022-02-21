@@ -8,7 +8,7 @@ export default class Mat{
   constructor(attr){
     Object.assign(this,defAttr(),attr)
   }
-  init(gl){
+  init(gl) {
     Object.values(this.maps).forEach((map, ind) => {
       if (!map.texture) {
         map.texture = gl.createTexture()
@@ -61,7 +61,6 @@ export default class Mat{
         gl.TEXTURE_MIN_FILTER,
         minFilter
     )
-    gl.bindTexture(gl.TEXTURE_2D, null)
   }
 
   update(gl,uniforms) {
@@ -98,8 +97,11 @@ export default class Mat{
   }
   setMap(key,val) {
     const obj = this.maps[key]
-    if(!obj){return}
-    obj.needUpdate = true
-    Object.assign(obj,val)
+    val.needUpdate = true
+    if (obj) {
+      Object.assign(obj,val)
+    } else {
+      this.maps[key]=val
+    }
   }
 }

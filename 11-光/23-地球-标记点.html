@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>地球</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <script id="vs" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    attribute vec2 a_Pin;
+    uniform mat4 u_PvMatrix;
+    uniform mat4 u_ModelMatrix;
+    varying vec2 v_Pin;
+    void main(){
+      gl_Position=u_PvMatrix*u_ModelMatrix*a_Position;
+      v_Pin=a_Pin;
+    }
+  </script>
+  <script id="fs" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform sampler2D u_Sampler;
+    varying vec2 v_Pin;
+    void main(){
+      gl_FragColor=texture2D(u_Sampler,v_Pin);
+    }
+  </script>
+  <script type="module">
+    import { createProgram, imgPromise } from "/jsm/Utils.js";
+    import {
+      Matrix4, PerspectiveCamera, Vector3
+    } from 'https://unpkg.com/three/build/three.module.js';
+    import OrbitControls from './lv/OrbitControls.js'
+    import Mat from './lv/Mat.js'
+    import Geo from './lv/Geo.js'
+    import Obj3D from './lv/Obj3D.js'
+    import Scene from './lv/Scene.js'
+    import Earth from './lv/Earth.js'
+    import Rect from './lv/Rect.js'
+    import Geography from './lv/Geography.js'
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    let gl = canvas.getContext('webgl');
+    gl.enable(gl.BLEND)
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+
+    // 球体
+    const earth = new Earth(0.5, 64, 32)
+    //矩形面
+    const rect = new Rect(0.02, 0.02, 0.5, 0)
+
+    //基于天安门经纬度，建立Geography 对象
+    const rad = Math.PI / 180
+    const geography = new Geography(
+      earth.r,
+      116.404 * rad,
+      39.915 * rad
+    )
+
+    // 目标点
+    const target = new Vector3()
+    //视点
+    const eye = geography.clone()
+      .setR(earth.r + 1)
+      .position
+    const [fov, aspect, near, far] = [
+      45, canvas.width / canvas.height,
+      0.1, 5
+    ]
+    // 透视相机
+    const camera = new PerspectiveCamera(fov, aspect, near, far)
+    camera.position.copy(eye)
+    // 轨道控制器
+    const orbit = new OrbitControls({ camera, target, dom: canvas, })
+
+    // 场景
+    const scene = new Scene({ gl })
+    //注册程序对象
+    scene.registerProgram(
+      'map',
+      {
+        program: createProgram(
+          gl,
+          document.getElementById('vs').innerText,
+          document.getElementById('fs').innerText,
+        ),
+        attributeNames: ['a_Position', 'a_Pin'],
+        uniformNames: ['u_PvMatrix', 'u_ModelMatrix', 'u_Sampler']
+      }
+    )
+
+    //地球
+    const matEarth = new Mat({
+      program: 'map',
+      data: {
+        u_PvMatrix: {
+          value: orbit.getPvMatrix().elements,
+          type: 'uniformMatrix4fv',
+        },
+        u_ModelMatrix: {
+          value: new Matrix4().elements,
+          type: 'uniformMatrix4fv',
+        },
+      },
+    })
+    const geoEarth = new Geo({
+      data: {
+        a_Position: {
+          array: earth.vertices,
+          size: 3
+        },
+        a_Pin: {
+          array: earth.uv,
+          size: 2
+        }
+      },
+      index: {
+        array: earth.indexes
+      }
+    })
+
+    /* 标记点 */
+    // 标记点的模型矩阵
+    const modelMatrix = new Matrix4()
+      .setPosition(geography.position)
+      .multiply(
+        new Matrix4().lookAt(
+          geography.position,
+          target,
+          new Vector3(0, 1, 0)
+        )
+      )
+
+    const matMark = new Mat({
+      program: 'map',
+      data: {
+        u_PvMatrix: {
+          value: orbit.getPvMatrix().elements,
+          type: 'uniformMatrix4fv'
+        },
+        u_ModelMatrix: {
+          value: modelMatrix.elements,
+          type: 'uniformMatrix4fv'
+        }
+      }
+    })
+    const geoMark = new Geo({
+      data: {
+        a_Position: {
+          array: rect.vertices,
+          size: 3
+        },
+        a_Pin: {
+          array: rect.uv,
+          size: 2
+        }
+      },
+      index: {
+        array: rect.indexes
+      }
+    })
+
+
+
+    //加载图片
+    const imgPromises = ['earth.jpg', 'mark.png'].map(name => {
+      const img = new Image()
+      img.src = `./images/${name}`
+      return imgPromise(img)
+    })
+    Promise.all(imgPromises).then(imgs => {
+      matEarth.maps.u_Sampler = { image: imgs[0] }
+      matMark.maps.u_Sampler = {
+        image: imgs[1],
+        format: gl.RGBA
+      }
+      scene.add(new Obj3D({
+        geo: geoEarth,
+        mat: matEarth
+      }))
+      scene.add(new Obj3D({
+        geo: geoMark,
+        mat: matMark
+      }))
+      render()
+    })
+
+    function render() {
+      orbit.getPvMatrix()
+      scene.draw()
+      requestAnimationFrame(render)
+    }
+
+
+
+
+
+    /* 取消右击菜单的显示 */
+    canvas.addEventListener('contextmenu', event => {
+      event.preventDefault()
+    })
+    /* 指针按下时，设置拖拽起始位，获取轨道控制器状态。 */
+    canvas.addEventListener('pointerdown', event => {
+      orbit.pointerdown(event)
+    })
+    /* 指针移动时，若控制器处于平移状态，平移相机；若控制器处于旋转状态，旋转相机。 */
+    canvas.addEventListener('pointermove', event => {
+      orbit.pointermove(event)
+    })
+    /* 指针抬起 */
+    canvas.addEventListener('pointerup', event => {
+      orbit.pointerup(event)
+    })
+    /* 滚轮事件 */
+    canvas.addEventListener('wheel', event => {
+      orbit.wheel(event)
+    })
+
+
+  </script>
+</body>
+
+</html>

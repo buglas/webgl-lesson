@@ -21,6 +21,9 @@ const defAttr = () => ({
   zoomScale: 0.95,
   spherical:new Spherical(),
   rotateDir: 'xy',
+  enablePan: true,
+  minZoom: 0,
+  maxZoom: Infinity,
 })
 
 export default class OrbitControls{
@@ -35,11 +38,11 @@ export default class OrbitControls{
     this.state = mouseButtons.get(button)
   }
   pointermove({ clientX, clientY }) {
-    const { dragStart, dragEnd, state, camera: { type } } = this
+    const { dragStart, dragEnd, state,enablePan, camera: { type } } = this
     dragEnd.set(clientX, clientY)
     switch (state) {
       case 'pan':
-        this[`pan${type}`](dragEnd.clone().sub(dragStart))
+        enablePan&&this[`pan${type}`](dragEnd.clone().sub(dragStart))
         break
       case 'rotate':
         this.rotate(dragEnd.clone().sub(dragStart))
@@ -50,8 +53,8 @@ export default class OrbitControls{
   pointerup() {
     this.state = 'none'
   }
-  wheel({ deltaY }) {
-    const { zoomScale, camera: { type } } = this
+  wheel({ deltaY },type=this.camera.type) {
+    const { zoomScale} = this
     let scale=deltaY < 0?zoomScale:1 / zoomScale
     this[`dolly${type}`](scale)
     this.updateSph()
@@ -60,8 +63,13 @@ export default class OrbitControls{
     this.spherical.radius /= dollyScale
   }
   dollyOrthographicCamera(dollyScale) {
-    const {camera}=this
+    const {camera,maxZoom,minZoom}=this
     camera.zoom *= dollyScale
+    const zoom = camera.zoom * dollyScale;
+    camera.zoom = Math.max(
+      Math.min(maxZoom, zoom),
+      minZoom
+    )
     camera.updateProjectionMatrix()
   }
   panPerspectiveCamera({ x, y }) {
@@ -187,9 +195,9 @@ export default class OrbitControls{
     const { camera, target, spherical } = this
     const rotateOffset = new Vector3()
       .setFromSpherical(spherical)
-    camera.position.copy(
-      target.clone().add(rotateOffset)
-    )
+    const position = target.clone().add(rotateOffset)
+    
+    camera.position.copy(position)
     this.updateCamera()
     this.resetSpherical()
   }

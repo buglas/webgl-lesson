@@ -1,3 +1,5 @@
+import { Vector3} from 'https://unpkg.com/three/build/three.module.js';
+
 function initShaders(gl, vsSource, fsSource) {
   //创建程序对象
   const program = gl.createProgram();
@@ -129,6 +131,22 @@ function parseColorStops(source) {
     return stops;
 }
 
+const isPC=()=>!navigator.userAgent.match(/(phone|pad|pod|iPhone|iPod|ios|iPad|Android|Mobile|BlackBerry|IEMobile|MQQBrowser|JUC|Fennec|wOSBrowser|BrowserNG|WebOS|Symbian|Windows Phone)/i)
+
+function worldPos({ clientX, clientY },canvas,pvMatrix) {
+  const [hw, hh] = [canvas.width / 2, canvas.height / 2]
+  // 裁剪空间位
+  const cp = new Vector3(
+    (clientX - hw) / hw,
+    -(clientY - hh) / hh,
+    0
+  )
+  // 鼠标在世界坐标系中的位置
+  return cp.applyMatrix4(
+    pvMatrix.clone().invert()
+  )
+}
+
 export {
   imgPromise,
   initShaders,
@@ -138,5 +156,7 @@ export {
   ScaleLinear,
   SinFn,
   GetIndexInGrid,
-  parseColorStops
+  parseColorStops,
+  isPC,
+  worldPos,
 };

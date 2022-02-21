@@ -29,7 +29,7 @@ export default class Geography{
   }
 
   //设置半径
-  serR(r) {
+  setR(r) {
     this.r = r
     this.updatePos()
     return this

@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>VR</title>
+  <style>
+    html {
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden
+    }
+
+    .wrapper {
+      display: flex;
+      position: absolute;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      /* background-color: rgba(0, 0, 0, 0.4); */
+      z-index: 10;
+    }
+
+    #playBtn {
+      padding: 24px 24px;
+      border-radius: 24px;
+      background-color: #00acec;
+      text-align: center;
+      color: #fff;
+      cursor: pointer;
+      font-size: 24px;
+      font-weight: bold;
+      border: 6px solid rgba(255, 255, 255, 0.7);
+      box-shadow: 0 9px 9px rgba(0, 0, 0, 0.7);
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <div class="wrapper">
+    <div id="playBtn">Loading……</div>
+  </div>
+  <script id="vs" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    attribute vec2 a_Pin;
+    uniform mat4 u_PvMatrix;
+    uniform mat4 u_ModelMatrix;
+    varying vec2 v_Pin;
+    void main(){
+      gl_Position=u_PvMatrix*u_ModelMatrix*a_Position;
+      v_Pin=a_Pin;
+    }
+  </script>
+  <script id="fs" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform sampler2D u_Sampler;
+    varying vec2 v_Pin;
+    void main(){
+      gl_FragColor=texture2D(u_Sampler,v_Pin);
+    }
+  </script>
+  <script type="module">
+    import { createProgram, isPC } from "/jsm/Utils.js";
+    import {
+      Matrix4, PerspectiveCamera, Vector3
+    } from 'https://unpkg.com/three/build/three.module.js';
+    import OrbitControls from './lv/OrbitControls.js'
+    import Mat from './lv/Mat.js'
+    import Geo from './lv/Geo.js'
+    import Obj3D from './lv/Obj3D.js'
+    import Scene from './lv/Scene.js'
+    import Earth from './lv/Earth.js'
+    import Gyro from './lv/Gyro.js'
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    let gl = canvas.getContext('webgl');
+
+    // 球体
+    const earth = new Earth(0.5, 64, 32)
+
+    // 目标点
+    const target = new Vector3()
+    //视点-根据陀螺仪做欧拉旋转
+    const eye = new Vector3(0.15, 0, 0.0001)
+    const [fov, aspect, near, far] = [
+      120, canvas.width / canvas.height,
+      0.1, 5
+    ]
+    // 透视相机
+    const camera = new PerspectiveCamera(fov, aspect, near, far)
+    camera.position.set(0, 0.42, 0)
+    // 轨道控制器
+    const orbit = new OrbitControls({
+      camera,
+      target,
+      dom: canvas,
+      enablePan: false,
+      maxZoom: 15,
+      minZoom: 0.4
+    })
+
+    //相机的视点和视椎体的垂直夹角的目标变量
+    const endPos = camera.position.clone()
+    let endFov = fov
+
+    // 场景
+    const scene = new Scene({ gl })
+    //注册程序对象
+    scene.registerProgram(
+      'map',
+      {
+        program: createProgram(
+          gl,
+          document.getElementById('vs').innerText,
+          document.getElementById('fs').innerText,
+        ),
+        attributeNames: ['a_Position', 'a_Pin'],
+        uniformNames: ['u_PvMatrix', 'u_ModelMatrix', 'u_Sampler']
+      }
+    )
+
+    //地球
+    const matEarth = new Mat({
+      program: 'map',
+      data: {
+        u_PvMatrix: {
+          value: orbit.getPvMatrix().elements,
+          type: 'uniformMatrix4fv',
+        },
+        u_ModelMatrix: {
+          value: new Matrix4().elements,
+          type: 'uniformMatrix4fv',
+        },
+      },
+    })
+    const geoEarth = new Geo({
+      data: {
+        a_Position: {
+          array: earth.vertices,
+          size: 3
+        },
+        a_Pin: {
+          array: earth.uv,
+          size: 2
+        }
+      },
+      index: {
+        array: earth.indexes
+      }
+    })
+
+    //图片序号
+    let level = 0
+    //加载图片
+    loadImg()
+
+    function loadImg() {
+      const image = new Image()
+      image.src = `./images/room${level}.jpg`
+      image.onload = function () {
+        if (level) {
+          //更新贴图
+          matEarth.setMap('u_Sampler', { image })
+        } else {
+          firstRender(image)
+        }
+        if (level < 3) {
+          level++
+          loadImg()
+        }
+      }
+    }
+
+    //首次渲染
+    function firstRender(image) {
+      btn.innerHTML = '开启VR之旅'
+      matEarth.maps.u_Sampler = {
+        image,
+        magFilter: gl.LINEAR,
+        minFilter: gl.LINEAR,
+      }
+      scene.add(new Obj3D({
+        geo: geoEarth,
+        mat: matEarth
+      }))
+      render()
+    }
+
+    // 遮罩
+    const wrapper = document.querySelector('.wrapper')
+    // 按钮
+    const btn = document.querySelector('#playBtn')
+    //PC判断
+    const pc = isPC()
+    //实例化陀螺仪
+    const gyro = new Gyro({
+      btn,
+      noDevice: () => {
+        btn.innerHTML = '您的设备里没有陀螺仪！'
+      },
+      reject: () => {
+        btn.innerHTML = '请允许使用陀螺仪🌹'
+      },
+      error: () => {
+        btn.innerHTML = '请求失败！'
+      },
+      init: () => {
+        wrapper.style.display = 'none'
+      },
+      onClick: () => {
+        if (pc) {
+          endFov = 60
+          endPos.set(0.15, 0, 0.0001)
+        }
+      },
+      change: (euler) => {
+        /* camera.position.copy(
+          eye.clone().applyEuler(euler)
+        )
+        orbit.updateCamera()
+        orbit.resetSpherical() */
+        endFov = 60
+        endPos.copy(
+          eye.clone().applyEuler(euler)
+        )
+      }
+    })
+    gyro.start()
+
+
+    function render() {
+      tween()
+      orbit.getPvMatrix()
+      scene.draw()
+      requestAnimationFrame(render)
+    }
+
+    //缓动动画
+    function tween(ratio = 0.05) {
+      if (pc && camera.fov < endFov + 1) {
+        return
+      }
+      camera.position.lerp(endPos, ratio)
+      camera.fov += (endFov - camera.fov) * ratio
+      camera.updateProjectionMatrix()
+      orbit.updateCamera()
+      orbit.resetSpherical()
+    }
+
+
+
+    /* 取消右击菜单的显示 */
+    canvas.addEventListener('contextmenu', event => {
+      event.preventDefault()
+    })
+    /* 指针按下时，设置拖拽起始位，获取轨道控制器状态。 */
+    canvas.addEventListener('pointerdown', event => {
+      orbit.pointerdown(event)
+    })
+    /* 指针移动时，若控制器处于平移状态，平移相机；若控制器处于旋转状态，旋转相机。 */
+    canvas.addEventListener('pointermove', event => {
+      orbit.pointermove(event)
+    })
+    /* 指针抬起 */
+    canvas.addEventListener('pointerup', event => {
+      orbit.pointerup(event)
+    })
+    /* 滚轮事件 */
+    canvas.addEventListener('wheel', event => {
+      orbit.wheel(event, 'OrthographicCamera')
+    })
+
+
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>VR</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden
+    }
+
+    .mark {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      top: 0;
+      left: 0;
+      color: #fff;
+      background-color: rgba(0, 0, 0, 0.6);
+      padding: 6px 12px;
+      border-radius: 3px;
+      user-select: none;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="marks"></div>
+  <script id="vs" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    attribute vec2 a_Pin;
+    uniform mat4 u_PvMatrix;
+    uniform mat4 u_ModelMatrix;
+    varying vec2 v_Pin;
+    void main(){
+      gl_Position=u_PvMatrix*u_ModelMatrix*a_Position;
+      v_Pin=a_Pin;
+    }
+  </script>
+  <script id="fs" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform sampler2D u_Sampler;
+    varying vec2 v_Pin;
+    void main(){
+      gl_FragColor=texture2D(u_Sampler,v_Pin);
+    }
+  </script>
+  <script type="module">
+    import { createProgram, worldPos } from "/jsm/Utils.js";
+    import {
+      Matrix4, PerspectiveCamera, Vector3
+    } from 'https://unpkg.com/three/build/three.module.js';
+    import OrbitControls from './lv/OrbitControls.js'
+    import Mat from './lv/Mat.js'
+    import Geo from './lv/Geo.js'
+    import Obj3D from './lv/Obj3D.js'
+    import Scene from './lv/Scene.js'
+    import Earth from './lv/Earth.js'
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    let gl = canvas.getContext('webgl');
+
+    // 球体
+    const earth = new Earth(0.5, 64, 32)
+
+    // 目标点
+    const target = new Vector3()
+    const [fov, aspect, near, far] = [
+      60, canvas.width / canvas.height,
+      0.1, 5
+    ]
+    // 透视相机
+    const camera = new PerspectiveCamera(fov, aspect, near, far)
+    // 轨道控制器
+    const orbit = new OrbitControls({
+      camera,
+      target,
+      dom: canvas,
+      enablePan: false,
+      maxZoom: 15,
+      minZoom: 0.4
+    })
+
+    //投影视图矩阵
+    const pvMatrix = orbit.getPvMatrix()
+
+    //标记
+    const marks = document.querySelector('#marks')
+
+
+    // 场景
+    const scene = new Scene({ gl })
+    //注册程序对象
+    scene.registerProgram(
+      'map',
+      {
+        program: createProgram(
+          gl,
+          document.getElementById('vs').innerText,
+          document.getElementById('fs').innerText,
+        ),
+        attributeNames: ['a_Position', 'a_Pin'],
+        uniformNames: ['u_PvMatrix', 'u_ModelMatrix', 'u_Sampler']
+      }
+    )
+
+    //地球
+    const mat = new Mat({
+      program: 'map',
+      data: {
+        u_PvMatrix: {
+          value: orbit.getPvMatrix().elements,
+          type: 'uniformMatrix4fv',
+        },
+        u_ModelMatrix: {
+          value: new Matrix4().elements,
+          type: 'uniformMatrix4fv',
+        },
+      },
+      maps: {
+        u_Sampler: {
+          magFilter: gl.LINEAR,
+          minFilter: gl.LINEAR,
+        }
+      }
+    })
+    const geo = new Geo({
+      data: {
+        a_Position: {
+          array: earth.vertices,
+          size: 3
+        },
+        a_Pin: {
+          array: earth.uv,
+          size: 2
+        }
+      },
+      index: {
+        array: earth.indexes
+      }
+    })
+    scene.add(new Obj3D({ mat, geo }))
+
+    //vr数据
+    let data = null
+    //当前vr数据
+    let curVr = null
+    //请求vr数据
+    fetch('./data/vr.json')
+      .then(res => res.json())
+      .then(dt => {
+        data = dt
+        curVr = getVrById(1)
+        //更新vr
+        updateVr()
+        //渲染
+        render()
+      })
+
+    //根据vr的id从vr集合里面获取相应的vr数据
+    function getVrById(id) {
+      for (let i = 0; i < data.length; i++) {
+        if (id === data[i].id) {
+          return data[i]
+        }
+      }
+    }
+
+    //根据当前vr数据更新vr
+    function updateVr() {
+      const image = new Image()
+      image.src = curVr.imgSrc
+      image.onload = () => {
+        //更新图片
+        mat.setMap('u_Sampler', { image })
+        //更新相机视点
+        camera.position.set(...curVr.eye)
+        orbit.updateCamera()
+        orbit.resetSpherical()
+        //显示标记点
+        showMark()
+      }
+    }
+
+    // 显示当前vr里的标记点
+    function showMark() {
+      curVr.marks.forEach(ele => {
+        const div = document.createElement('div')
+        div.className = 'mark'
+        div.innerText = ele.name
+        div.setAttribute('data-link', ele.link)
+        marks.append(div)
+      })
+    }
+
+    //更新标记点的canvas坐标位
+    function updateMarkCp() {
+      if (!marks.children.length) { return }
+      const { position } = camera
+      const EO = target.clone().sub(position)
+      const [halfW, halfH] = [canvas.width / 2, canvas.height / 2]
+      curVr.marks.forEach((ele, ind) => {
+        const markWp = new Vector3(...ele.pos)
+        const mark = marks.children[ind]
+        const dot = markWp.clone().sub(position).dot(EO)
+        mark.style.display = dot > 0 ? 'block' : 'none'
+        const { x, y } = markWp.applyMatrix4(pvMatrix)
+        mark.style.left = `${(x + 1) * halfW}px`
+        mark.style.top = `${(-y + 1) * halfH}px`
+      })
+    }
+
+    function render() {
+      orbit.getPvMatrix()
+      scene.draw()
+      updateMarkCp()
+      requestAnimationFrame(render)
+    }
+
+    /* 点击标记点容器 */
+    marks.addEventListener('click', ({ target }) => {
+      if (target.className !== 'mark') { return }
+      marks.innerHTML = ''
+      curVr = getVrById(parseInt(target.getAttribute('data-link')))
+      updateVr()
+    })
+
+    /* 取消右击菜单的显示 */
+    canvas.addEventListener('contextmenu', event => {
+      event.preventDefault()
+    })
+    /* 指针按下时，设置拖拽起始位，获取轨道控制器状态。 */
+    canvas.addEventListener('pointerdown', event => {
+      orbit.pointerdown(event)
+    })
+    /* 指针移动时，若控制器处于平移状态，平移相机；若控制器处于旋转状态，旋转相机。 */
+    window.addEventListener('pointermove', event => {
+      orbit.pointermove(event)
+    })
+    /* 指针抬起 */
+    canvas.addEventListener('pointerup', event => {
+      orbit.pointerup(event)
+    })
+    /* 滚轮事件 */
+    canvas.addEventListener('wheel', event => {
+      orbit.wheel(event, 'OrthographicCamera')
+    })
+
+
+  </script>
+</body>
+
+</html>
