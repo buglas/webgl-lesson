@@ -51,7 +51,7 @@ export default class Earth{
         // 计算顶点和法线
         const vertice = new Geography(r, theta, phi).position
         vertices.push(...vertice)
-				normals.push(...vertice.normalize())
+	normals.push(...vertice.normalize())
         uv.push(
           x / widthSegments,
           1-y/heightSegments
