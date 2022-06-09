@@ -50,8 +50,8 @@ export default class Earth{
         const theta = thetaSize * x - Math.PI
         // 计算顶点和法线
         const vertice = new Geography(r, theta, phi).position
-        vertices.push(...Object.values(vertice))
-        normals.push(...Object.values(vertice.normalize()))
+        vertices.push(...vertice)
+				normals.push(...vertice.normalize())
         uv.push(
           x / widthSegments,
           1-y/heightSegments
