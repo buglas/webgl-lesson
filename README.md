@@ -1,5 +1,7 @@
-# 开课吧WebGL 课件
-搭配李伟的博客学习哦
+# WebGL 课件
 
-http://yxyy.name/blog/
+我的博客：http://yxyy.name/blog/
 
+掘金地址：https://juejin.cn/user/87572001856951/columns
+
+B站视频：https://space.bilibili.com/1028978784/channel/seriesdetail?sid=2412317
