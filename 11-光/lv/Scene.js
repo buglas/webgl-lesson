@@ -12,7 +12,7 @@ export default class Scene{
   constructor(attr){
     Object.assign(this,defAttr(),attr)
   }
-  registerProgram(name,{program,attributeNames,uniformNames}) {
+  registerProgram(name,{program,attributeNames=[],uniformNames=[]}) {
     const { gl, programs } = this
     const attributes = new Map()
     const uniforms = new Map()

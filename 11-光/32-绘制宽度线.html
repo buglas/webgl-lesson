@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>宽度线</title>
+  <link rel="icon" href="https://img.kaikeba.com/kkb_portal_icon.ico">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: #000;
+    }
+
+    #canvas {
+      background-color: antiquewhite;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+  <script id="vs" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    void main(){
+      gl_Position = a_Position;
+    }
+  </script>
+  <script id="fs" type="x-shader/x-fragment">
+    precision mediump float;
+    void main(){
+      gl_FragColor=vec4(1.0);
+    }
+  </script>
+  <script type="module">
+    import { createProgram, imgPromise } from './lv/Utils.js';
+    import { Matrix4, PerspectiveCamera, Vector3, Vector2 } from 'https://unpkg.com/three/build/three.module.js';
+    import Mat from './lv/Mat.js'
+    import Geo from './lv/Geo.js'
+    import Obj3D from './lv/Obj3D.js'
+    import Scene from './lv/Scene.js'
+    import BoldLine from './lv/BoldLine.js'
+
+    const canvas = document.querySelector("#canvas");
+    canvas.width = 900;
+    canvas.height = 900;
+    let gl = canvas.getContext('webgl');
+
+    // 场景
+    const scene = new Scene({ gl })
+    // 注册程序对象
+    scene.registerProgram(
+      'line',
+      {
+        program: createProgram(
+          gl,
+          document.getElementById('vs').innerText,
+          document.getElementById('fs').innerText
+        ),
+        attributeNames: ['a_Position'],
+      }
+    )
+    const mat = new Mat({
+      program: 'line',
+      mode: 'TRIANGLES'
+    })
+
+    const line = new BoldLine([
+      new Vector2(-0.7, 0),
+      new Vector2(-0.4, 0),
+      new Vector2(-0.4, 0.4),
+      new Vector2(0.3, 0.4),
+      new Vector2(-0.3, -0.4),
+      new Vector2(0.4, -0.4),
+      new Vector2(0.4, 0),
+      new Vector2(0.7, 0.4),
+    ], 0.2)
+
+    const geo = new Geo({
+      data: {
+        a_Position: {
+          array: line.vertices,
+          size: 2
+        },
+      },
+      index: {
+        array: line.indexes
+      }
+    })
+    scene.add(new Obj3D({ geo, mat }))
+    scene.draw()
+
+
+
+
+  </script>
+</body>
+
+</html>

@@ -27,9 +27,13 @@ export default class Mat{
       texture
     } = map
 
+    if (!texture) {
+      map.texture=gl.createTexture()
+    }
+
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1)
     gl.activeTexture(gl[`TEXTURE${ind}`])
-    gl.bindTexture(gl.TEXTURE_2D, texture)
+    gl.bindTexture(gl.TEXTURE_2D, map.texture)
     image&&gl.texImage2D(
         gl.TEXTURE_2D,
         0,
