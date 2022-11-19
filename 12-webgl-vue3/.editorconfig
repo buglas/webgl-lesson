@@ -1,0 +1,14 @@
+root = true
+# 匹配全部文件
+[*]
+charset = utf-8
+# 缩进方式-配置此处就不用配置prettier了
+indent_style = tab
+tab_width = 4
+# 每行多少个字符开始折行-配置此处就不用配置prettier了
+max_line_length=120
+end_of_line = lf
+# 在文件结尾插入新行
+insert_final_newline = true
+# 删除一行中的前后空格
+trim_trailing_whitespace = true
