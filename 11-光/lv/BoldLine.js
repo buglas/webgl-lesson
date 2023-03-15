@@ -61,7 +61,7 @@ export default class BoldLine{
       )
 
       // 让四边形躺平
-      const ang=B1.clone().sub(A1).angle()
+      const ang=-B1.clone().sub(A1).angle()
       const O = new Vector2()
       const [lb, rt, rb] = [
         A2.clone().sub(A1).rotateAround(O,ang),
